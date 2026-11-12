@@ -50,7 +50,7 @@ export function Shell({ section, children }: Readonly<{ section: Section; childr
           <b>P</b>Pono
         </a>
         <a className="btn btn-primary btn-sm" href="/catalog" style={{ justifyContent: 'center' }}>
-          {m.catalog_use()}
+          {m.rail_new_project()}
         </a>
         <div>
           <p className="mono-label" style={{ padding: '0 10px 8px' }}>

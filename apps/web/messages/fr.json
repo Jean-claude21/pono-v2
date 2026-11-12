@@ -293,5 +293,11 @@
   "action_agent_granted": "Accès donné à un agent",
   "action_agent_revoked": "Accès d’un agent coupé",
   "action_plan_changed": "Plan changé",
-  "action_admin_server_slept": "Serveur mis en veille par l’exploitant"
+  "action_admin_server_slept": "Serveur mis en veille par l’exploitant",
+  "rail_new_project": "Nouveau projet",
+  "category_free": "Libre",
+  "category_services": "Services",
+  "category_commerce": "Commerce",
+  "category_software": "Logiciel",
+  "category_presence": "Présence"
 }

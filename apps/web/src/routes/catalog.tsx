@@ -56,7 +56,7 @@ function Catalog() {
               aria-pressed={chosen?.id === t.id}
               onClick={() => setChosen(t)}
             >
-              <span className="mono-label">{t.category}</span>
+              <span className="mono-label">{label('category', t.category)}</span>
               <h4>{t.name[locale]}</h4>
               <p>{t.description[locale]}</p>
               <div className="row">

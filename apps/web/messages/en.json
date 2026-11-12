@@ -293,5 +293,11 @@
   "action_agent_granted": "Access given to an agent",
   "action_agent_revoked": "Agent access cut",
   "action_plan_changed": "Plan changed",
-  "action_admin_server_slept": "Server put to sleep by the operator"
+  "action_admin_server_slept": "Server put to sleep by the operator",
+  "rail_new_project": "New project",
+  "category_free": "Free",
+  "category_services": "Services",
+  "category_commerce": "Commerce",
+  "category_software": "Software",
+  "category_presence": "Presence"
 }

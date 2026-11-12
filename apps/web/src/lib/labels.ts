@@ -3,6 +3,13 @@ import { getLocale } from '@/paraglide/runtime.js';
 
 /** Stable codes from the API, translated here (D-009). An unknown code shows as it is. */
 const tables: Record<string, Record<string, () => string>> = {
+  category: {
+    free: m.category_free,
+    services: m.category_services,
+    commerce: m.category_commerce,
+    software: m.category_software,
+    presence: m.category_presence,
+  },
   serverStatus: {
     provisioning: m.server_status_provisioning,
     running: m.server_status_running,
