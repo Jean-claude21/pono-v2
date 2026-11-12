@@ -6,29 +6,26 @@ import { LocaleSwitch } from './LocaleSwitch';
 import { SignIn } from './SignIn';
 
 export type Section =
-  'projects' | 'usage' | 'servers' | 'catalog' | 'connections' | 'agents' | 'settings';
+  'projects' | 'usage' | 'servers' | 'catalog' | 'connections' | 'agents' | 'settings' | 'admin';
 
 interface Item {
   label: string;
-  href?: string;
-  current?: boolean;
+  href: string;
+  section: Section;
 }
 
-function Nav({ items }: Readonly<{ items: Item[] }>) {
+function Nav({ items, current }: Readonly<{ items: Item[]; current: Section }>) {
   return (
     <nav>
-      {items.map((item) =>
-        item.href ? (
-          <a key={item.label} href={item.href} aria-current={item.current ? 'page' : undefined}>
-            {item.label}
-          </a>
-        ) : (
-          <a key={item.label} aria-disabled="true" className="mute">
-            {item.label}
-            <span className="figures">{m.rail_soon()}</span>
-          </a>
-        ),
-      )}
+      {items.map((item) => (
+        <a
+          key={item.href}
+          href={item.href}
+          aria-current={item.section === current ? 'page' : undefined}
+        >
+          {item.label}
+        </a>
+      ))}
     </nav>
   );
 }
@@ -41,7 +38,7 @@ export function Shell({ section, children }: Readonly<{ section: Section; childr
     if (me.result.error.status === 401) return <SignIn />;
     return <p className="page">{label('error', me.result.error.code)}</p>;
   }
-  const person = me.result.data.person;
+  const { person, isAdmin } = me.result.data;
   const signOut = async () => {
     await api('/auth/sign-out', { method: 'POST' });
     window.location.assign('/');
@@ -52,16 +49,20 @@ export function Shell({ section, children }: Readonly<{ section: Section; childr
         <a className="monogram" href="/">
           <b>P</b>Pono
         </a>
+        <a className="btn btn-primary btn-sm" href="/catalog" style={{ justifyContent: 'center' }}>
+          {m.catalog_use()}
+        </a>
         <div>
           <p className="mono-label" style={{ padding: '0 10px 8px' }}>
             {m.rail_workshop()}
           </p>
           <Nav
+            current={section}
             items={[
-              { label: m.rail_projects(), href: '/', current: section === 'projects' },
-              { label: m.rail_usage(), href: '/usage', current: section === 'usage' },
-              { label: m.rail_servers(), href: '/servers', current: section === 'servers' },
-              { label: m.rail_catalog(), href: '/catalog', current: section === 'catalog' },
+              { label: m.rail_projects(), href: '/', section: 'projects' },
+              { label: m.rail_usage(), href: '/usage', section: 'usage' },
+              { label: m.rail_servers(), href: '/servers', section: 'servers' },
+              { label: m.rail_catalog(), href: '/catalog', section: 'catalog' },
             ]}
           />
         </div>
@@ -70,14 +71,14 @@ export function Shell({ section, children }: Readonly<{ section: Section; childr
             {m.rail_organization()}
           </p>
           <Nav
+            current={section}
             items={[
-              {
-                label: m.rail_services(),
-                href: '/connections',
-                current: section === 'connections',
-              },
-              { label: m.rail_agents(), href: '/agents', current: section === 'agents' },
-              { label: m.rail_settings(), href: '/settings', current: section === 'settings' },
+              { label: m.rail_services(), href: '/connections', section: 'connections' },
+              { label: m.rail_agents(), href: '/agents', section: 'agents' },
+              { label: m.rail_settings(), href: '/settings', section: 'settings' },
+              ...(isAdmin
+                ? [{ label: m.rail_admin(), href: '/admin', section: 'admin' as const }]
+                : []),
             ]}
           />
         </div>

@@ -1,5 +1,7 @@
 import { createFileRoute } from '@tanstack/react-router';
 import { useState } from 'react';
+import { ProjectServer } from '@/features/projects/ProjectServer';
+import { Releases } from '@/features/releases/Releases';
 import { Shell } from '@/features/shell/Shell';
 import { api, useApi, type DeploymentView, type JournalLine, type ProjectView } from '@/lib/api';
 import { ago, label, when } from '@/lib/labels';
@@ -102,6 +104,9 @@ function Project({ id }: Readonly<{ id: string }>) {
           <dd>{ago(project.refreshedAt)}</dd>
         </div>
       </dl>
+
+      <ProjectServer projectId={id} />
+      <Releases projectId={id} />
 
       <h3 className="section-title mono-label">{m.project_deployments()}</h3>
       {deployments.length === 0 ? (

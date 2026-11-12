@@ -3,6 +3,8 @@ import { useCallback, useEffect, useState } from 'react';
 export interface ApiError {
   code: string;
   status: number;
+  /** What the person needs to decide, when the API says it (e.g. the servers holding the limit). */
+  detail?: Record<string, unknown>;
 }
 
 export type ApiResult<T> = { ok: true; data: T } | { ok: false; error: ApiError };
@@ -24,9 +26,18 @@ export async function api<T>(
     return { ok: false, error: { code: 'network', status: 0 } };
   }
   if (response.status === 204) return { ok: true, data: undefined as T };
-  const body = (await response.json().catch(() => null)) as { error?: { code: string } } | null;
+  const body = (await response.json().catch(() => null)) as {
+    error?: { code: string; detail?: Record<string, unknown> };
+  } | null;
   if (!response.ok)
-    return { ok: false, error: { code: body?.error?.code ?? 'internal', status: response.status } };
+    return {
+      ok: false,
+      error: {
+        code: body?.error?.code ?? 'internal',
+        status: response.status,
+        ...(body?.error?.detail ? { detail: body.error.detail } : {}),
+      },
+    };
   return { ok: true, data: body as T };
 }
 
@@ -55,6 +66,7 @@ export function useApi<T>(path: string): Loaded<T> {
 export interface Me {
   person: { id: string; login: string; name: string | null };
   organization: { id: string; name: string; role: string } | null;
+  isAdmin: boolean;
 }
 
 export interface DeploymentView {

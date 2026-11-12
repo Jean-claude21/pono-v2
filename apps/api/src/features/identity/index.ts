@@ -139,7 +139,7 @@ export function authRoutes(deps: IdentityDeps): Hono<AppEnv> {
 }
 
 /** `/v1/me`: who is signed in, and where they act. */
-export function meRoutes(deps: Pick<IdentityDeps, 'pool'>): Hono<AppEnv> {
+export function meRoutes(deps: Pick<IdentityDeps, 'pool'> & { admins?: string[] }): Hono<AppEnv> {
   return new Hono<AppEnv>().get('/', async (c) => {
     const actor = c.var.actor;
     const orgs = await deps.pool.query<{ id: string; name: string; role: string }>(
@@ -149,6 +149,7 @@ export function meRoutes(deps: Pick<IdentityDeps, 'pool'>): Hono<AppEnv> {
     return c.json({
       person: { id: actor.personId, login: actor.login, name: actor.name },
       organization: orgs.rows.find((o) => o.id === actor.organizationId) ?? null,
+      isAdmin: (deps.admins ?? []).includes(actor.login),
     });
   });
 }
