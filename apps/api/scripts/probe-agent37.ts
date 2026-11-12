@@ -15,7 +15,8 @@ const env = Object.fromEntries(
 );
 const host = agent37Host({ apiKey: env.AGENT37_API_KEY!, fetch });
 const t0 = Date.now();
-const lap = (label: string, extra = '') => console.log(`${((Date.now() - t0) / 1000).toFixed(1)}s ${label} ${extra}`);
+const lap = (label: string, extra = '') =>
+  console.log(`${((Date.now() - t0) / 1000).toFixed(1)}s ${label} ${extra}`);
 const waitFor = async (id: string, wanted: string[], max = 180) => {
   for (let i = 0; i < max; i++) {
     const s = await host.get(id);
@@ -32,7 +33,10 @@ const created = await host.create({
   budgetMicros: 100_000,
   idleSeconds: 300,
 });
-lap('created', `${created.externalId} ${created.status} ${created.size} ${created.monthlyMicros / 1e6}$/month`);
+lap(
+  'created',
+  `${created.externalId} ${created.status} ${created.size} ${created.monthlyMicros / 1e6}$/month`,
+);
 try {
   const up = await waitFor(created.externalId, ['running']);
   lap('running', up.url ?? '');

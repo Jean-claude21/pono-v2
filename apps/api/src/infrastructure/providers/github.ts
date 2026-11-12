@@ -57,6 +57,41 @@ export function githubCodeHost(fetchImpl: Fetch): CodeHost & Connectable {
       });
       return repos.map(repository);
     },
+    async createRepository(token, input) {
+      let created: RepoAnswer;
+      try {
+        created = await fetchJson<RepoAnswer>(fetchImpl, {
+          provider: ID,
+          url: `${API}/user/repos`,
+          method: 'POST',
+          headers: headers(token),
+          body: {
+            name: input.name,
+            private: input.private,
+            description: input.description,
+            auto_init: true,
+          },
+        });
+      } catch (error) {
+        if (error instanceof ProviderError && error.status === 422) {
+          throw new ProviderError(ID, 409, 'A repository of that name exists.');
+        }
+        throw error;
+      }
+      for (const [path, content] of Object.entries(input.files)) {
+        await fetchJson(fetchImpl, {
+          provider: ID,
+          url: `${API}/repos/${created.full_name}/contents/${path}`,
+          method: 'PUT',
+          headers: headers(token),
+          body: {
+            message: `chore: ${path} by Pono`,
+            content: Buffer.from(content, 'utf8').toString('base64'),
+          },
+        });
+      }
+      return repository(created);
+    },
     async repository(token, fullName) {
       try {
         return repository(

@@ -1,5 +1,6 @@
 import { serve } from '@hono/node-server';
 import { createApp } from './app.js';
+import { loadCatalog } from './features/catalog/index.js';
 import { devIdentity, githubIdentity, type IdentityProvider } from './features/identity/index.js';
 import { agent37Host } from './infrastructure/providers/agent37.js';
 import { unavailableServerHost } from './infrastructure/providers/no-server-host.js';
@@ -64,6 +65,7 @@ const app = createApp({
     : unavailableServerHost(),
   serverBudgetMicros: Math.round(config.PONO_SERVER_BUDGET_USD * 1_000_000),
   serverIdleSeconds: config.PONO_SERVER_IDLE_MINUTES * 60,
+  catalog: loadCatalog(),
   now: () => new Date(),
 });
 

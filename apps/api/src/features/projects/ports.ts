@@ -15,6 +15,11 @@ export interface CodeHost {
   readonly id: string;
   listRepositories(credential: string): Promise<Repository[]>;
   repository(credential: string, fullName: string): Promise<Repository | null>;
+  /** Creates a repository in the person's own account, with its first files (phase 6). */
+  createRepository(
+    credential: string,
+    input: { name: string; private: boolean; description: string; files: Record<string, string> },
+  ): Promise<Repository>;
 }
 
 export interface HostedSite {

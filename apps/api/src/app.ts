@@ -1,4 +1,5 @@
 import { Hono } from 'hono';
+import { catalogRoutes, type Catalog } from './features/catalog/index.js';
 import { connectionRoutes, type Connectable } from './features/connections/index.js';
 import { healthRoutes } from './features/health/index.js';
 import {
@@ -7,6 +8,7 @@ import {
   requireSession,
   type IdentityProvider,
 } from './features/identity/index.js';
+import { launchRoutes } from './features/launch/index.js';
 import { projectRoutes, type WorkshopAdapters } from './features/projects/index.js';
 import { serverRoutes, serversUsage, type ProjectServerHost } from './features/servers/index.js';
 import { usageRoutes, type InternalUsage, type UsageSource } from './features/usage/index.js';
@@ -28,6 +30,7 @@ export interface AppDeps {
   serverHost: ProjectServerHost;
   serverBudgetMicros: number;
   serverIdleSeconds: number;
+  catalog: Catalog;
   now: () => Date;
 }
 
@@ -47,6 +50,8 @@ export function createApp(deps: AppDeps): Hono<AppEnv> {
     usageRoutes({ ...deps, internalUsage: [...(deps.internalUsage ?? []), serversUsage()] }),
   );
   v1.route('/', serverRoutes(deps));
+  v1.route('/catalog', catalogRoutes(deps.catalog));
+  v1.route('/launch', launchRoutes(deps));
   app.route('/v1', v1);
 
   app.notFound((c) => c.json(errorBody('route.not_found', 'No such route.'), 404));

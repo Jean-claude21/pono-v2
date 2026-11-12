@@ -2,6 +2,7 @@ import { randomBytes } from 'node:crypto';
 import { inject } from 'vitest';
 import { createApp, type AppDeps } from '../../src/app.js';
 import type { Connectable } from '../../src/features/connections/index.js';
+import { loadCatalog } from '../../src/features/catalog/index.js';
 import { devIdentity } from '../../src/features/identity/index.js';
 import type {
   CodeHost,
@@ -78,6 +79,7 @@ export function fakeServerHost(w: World): ProjectServerHost {
 }
 
 export interface World {
+  files: Map<string, Record<string, string>>;
   servers: Map<string, HostedServer & { env: Record<string, string> }>;
   usage: Reading[] | null;
   repositories: Repository[];
@@ -92,6 +94,7 @@ export interface World {
 export function world(): World {
   return {
     usage: [],
+    files: new Map(),
     servers: new Map(),
     repositories: [],
     sites: new Map(),
@@ -108,6 +111,22 @@ export function fakeAdapters(w: World): AppDeps['adapters'] {
     async listRepositories(credential) {
       w.seen.push(credential);
       return w.repositories;
+    },
+    async createRepository(credential, input) {
+      w.seen.push(credential);
+      if (w.repositories.some((r) => r.name === input.name))
+        throw new ProviderError('code', 409, 'exists');
+      const repository = {
+        fullName: `jc/${input.name}`,
+        name: input.name,
+        defaultBranch: 'main',
+        url: '',
+        private: input.private,
+        pushedAt: null,
+      };
+      w.repositories.push(repository);
+      w.files.set(repository.fullName, input.files);
+      return repository;
     },
     async repository(credential, fullName) {
       w.seen.push(credential);
@@ -165,6 +184,7 @@ export function testApp(): TestApp {
     serverHost: fakeServerHost(w),
     serverBudgetMicros: 5_000_000,
     serverIdleSeconds: 1800,
+    catalog: loadCatalog(),
     now: () => now.value,
   });
   return { app, pool, world: w, now };
