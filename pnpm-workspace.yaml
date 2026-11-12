@@ -1,0 +1,10 @@
+packages:
+  - apps/*
+  - packages/*
+
+allowBuilds:
+  esbuild: true
+
+overrides:
+  # Zod can exhaust memory validating oversized input (GHSA-mrhx-c7xc-m3w5): every zod 4 at 4.6.6+.
+  'zod@>=4.0.0 <4.6.6': ^4.6.6

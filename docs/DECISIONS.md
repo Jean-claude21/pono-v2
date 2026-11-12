@@ -132,3 +132,37 @@ projet, en reprendre un, le trouver) et chaque outil a son équivalent dans la c
 - Spec Kit `v0.16.0` : specify → clarify → plan → tasks → analyze → implement → converge.
 - Branches : `main` (geste humain), `dev` (intégration, CI verte), `NNN-slug` par phase.
 - Tests sur un Postgres 17 local lancé par les tests, ou une branche Neon `test`.
+
+---
+
+## D-011 — Les agents se relient par un jeton personnel, en attendant OAuth
+
+**Tranché le 2026-11-12.**
+
+Une personne donne à un agent un jeton (lecture seule, ou lecture et actions) dans la console ; il
+est montré une fois, Pono n'en garde que l'empreinte, et il se coupe d'un clic. Claude Code et tout
+client MCP l'acceptent en en-tête. L'autorisation OAuth 2.1 avec enregistrement dynamique, que le
+connecteur de Claude.ai exige, vient ensuite.
+
+**Pourquoi.** Le chemin le plus court vers « on continue lectio » depuis Claude Code, sans rien
+retirer à la sécurité : mêmes droits que la personne, journal, coupure immédiate.
+
+---
+
+## D-012 — La forme d'un serveur de projet
+
+**Tranché le 2026-11-12.**
+
+2 vCPU, 4 Go, 4 Go de disque (4,76 $ par mois éveillé chez Agent37), veille après 30 minutes,
+plafond de 5 $ par mois et par serveur, région États-Unis. Le modèle suit l'agent : Claude Code,
+Codex, OpenCode, ou aucun.
+
+---
+
+## D-013 — Le plan ne change que par la facturation
+
+**Tranché le 2026-11-12.**
+
+Le rôle de l'API ne peut pas écrire le plan d'une organisation ; seule la fonction appelée par un
+événement signé du fournisseur de paiement le fait. Sans clé Stripe, un fournisseur de développement
+signe localement ; en production sans clé, changer de plan est refusé.
