@@ -15,6 +15,12 @@ const schema = z.object({
   PONO_GITHUB_CLIENT_SECRET: z.string().min(1).optional(),
   /** `1` wires the development sign-in; refused in production (FR-001). */
   PONO_DEV_SIGN_IN: z.enum(['0', '1']).default('0'),
+  /** Pono's own Agent37 workspace key: project servers run there (D-003). */
+  AGENT37_API_KEY: z.string().min(1).optional(),
+  /** A server's spending cap for a month, in USD. */
+  PONO_SERVER_BUDGET_USD: z.coerce.number().min(0).default(5),
+  /** Idle minutes before a server sleeps. */
+  PONO_SERVER_IDLE_MINUTES: z.coerce.number().int().min(5).default(30),
 });
 
 export type Config = z.infer<typeof schema>;

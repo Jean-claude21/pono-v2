@@ -13,6 +13,7 @@ const ORGANIZATION_TABLES = [
   'subscriptions',
   'usage_readings',
   'alerts',
+  'project_servers',
   'organizations',
   'members',
   'connections',
@@ -68,6 +69,11 @@ async function fill(org: string): Promise<void> {
     await client.query(
       `INSERT INTO usage_readings (organization_id, provider, meter, used, unit, source) VALUES ($1, 'p', 'm', 1, 'u', 'measured')`,
       [org],
+    );
+    await client.query(
+      `INSERT INTO project_servers (organization_id, project_id, provider, external_id, agent, status, size, monthly_micros, budget_micros, created_by)
+       VALUES ($1, $2, 'h', 'x', 'none', 'running', 's', 1, 1, $3)`,
+      [org, project, randomUUID()],
     );
     await client.query(
       `INSERT INTO alerts (organization_id, key, kind, level) VALUES ($1, 'k', 'quota', 'warn')`,

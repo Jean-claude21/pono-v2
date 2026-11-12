@@ -6,6 +6,8 @@ export class AppError extends Error {
     readonly code: string,
     readonly status: ContentfulStatusCode,
     message: string,
+    /** What the person needs to decide, never a secret (e.g. the servers that hold the limit). */
+    readonly detail?: Record<string, unknown>,
   ) {
     super(message);
     this.name = 'AppError';
@@ -13,9 +15,13 @@ export class AppError extends Error {
 }
 
 export interface ErrorBody {
-  error: { code: string; message: string };
+  error: { code: string; message: string; detail?: Record<string, unknown> };
 }
 
-export function errorBody(code: string, message: string): ErrorBody {
-  return { error: { code, message } };
+export function errorBody(
+  code: string,
+  message: string,
+  detail?: Record<string, unknown>,
+): ErrorBody {
+  return { error: { code, message, ...(detail ? { detail } : {}) } };
 }

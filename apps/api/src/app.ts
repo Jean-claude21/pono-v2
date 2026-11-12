@@ -8,6 +8,7 @@ import {
   type IdentityProvider,
 } from './features/identity/index.js';
 import { projectRoutes, type WorkshopAdapters } from './features/projects/index.js';
+import { serverRoutes, serversUsage, type ProjectServerHost } from './features/servers/index.js';
 import { usageRoutes, type InternalUsage, type UsageSource } from './features/usage/index.js';
 import type { AppEnv } from './platform/context.js';
 import { ping, type Pool } from './platform/db.js';
@@ -24,6 +25,9 @@ export interface AppDeps {
   adapters: WorkshopAdapters;
   usageSources: UsageSource[];
   internalUsage?: InternalUsage[];
+  serverHost: ProjectServerHost;
+  serverBudgetMicros: number;
+  serverIdleSeconds: number;
   now: () => Date;
 }
 
@@ -38,13 +42,17 @@ export function createApp(deps: AppDeps): Hono<AppEnv> {
   v1.route('/me', meRoutes(deps));
   v1.route('/connections', connectionRoutes(deps));
   v1.route('/', projectRoutes(deps));
-  v1.route('/', usageRoutes(deps));
+  v1.route(
+    '/',
+    usageRoutes({ ...deps, internalUsage: [...(deps.internalUsage ?? []), serversUsage()] }),
+  );
+  v1.route('/', serverRoutes(deps));
   app.route('/v1', v1);
 
   app.notFound((c) => c.json(errorBody('route.not_found', 'No such route.'), 404));
   app.onError((error, c) => {
     if (error instanceof AppError)
-      return c.json(errorBody(error.code, error.message), error.status);
+      return c.json(errorBody(error.code, error.message, error.detail), error.status);
     console.error(error);
     return c.json(errorBody('internal', 'Something went wrong.'), 500);
   });

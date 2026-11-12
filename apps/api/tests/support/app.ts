@@ -12,6 +12,7 @@ import type {
   LinkChecker,
   Repository,
 } from '../../src/features/projects/index.js';
+import type { HostedServer, ProjectServerHost } from '../../src/features/servers/index.js';
 import type { Reading, UsageSource } from '../../src/features/usage/index.js';
 import { createPool, type Pool } from '../../src/platform/db.js';
 import { ProviderError } from '../../src/platform/http.js';
@@ -44,7 +45,40 @@ export function fakeUsage(w: World): UsageSource {
   };
 }
 
+/** Servers in memory, like the host would keep them. */
+export function fakeServerHost(w: World): ProjectServerHost {
+  let next = 0;
+  return {
+    id: 'servers',
+    async create(input) {
+      const externalId = `srv${++next}`;
+      const server: HostedServer = {
+        externalId,
+        status: 'running',
+        url: `https://${externalId}.servers.test`,
+        size: '2 vCPU · 4 GB',
+        monthlyMicros: 4_760_000,
+      };
+      w.servers.set(externalId, { ...server, env: input.env });
+      return server;
+    },
+    async get(id) {
+      return w.servers.get(id) ?? null;
+    },
+    async sleep(id) {
+      w.servers.get(id)!.status = 'sleeping';
+    },
+    async wake(id) {
+      w.servers.get(id)!.status = 'running';
+    },
+    async destroy(id) {
+      w.servers.delete(id);
+    },
+  };
+}
+
 export interface World {
+  servers: Map<string, HostedServer & { env: Record<string, string> }>;
   usage: Reading[] | null;
   repositories: Repository[];
   sites: Map<string, HostedSite & { repository: string }>;
@@ -58,6 +92,7 @@ export interface World {
 export function world(): World {
   return {
     usage: [],
+    servers: new Map(),
     repositories: [],
     sites: new Map(),
     deployments: new Map(),
@@ -127,6 +162,9 @@ export function testApp(): TestApp {
     ],
     adapters: fakeAdapters(w),
     usageSources: [fakeUsage(w)],
+    serverHost: fakeServerHost(w),
+    serverBudgetMicros: 5_000_000,
+    serverIdleSeconds: 1800,
     now: () => now.value,
   });
   return { app, pool, world: w, now };

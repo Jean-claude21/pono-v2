@@ -1,6 +1,8 @@
 import { serve } from '@hono/node-server';
 import { createApp } from './app.js';
 import { devIdentity, githubIdentity, type IdentityProvider } from './features/identity/index.js';
+import { agent37Host } from './infrastructure/providers/agent37.js';
+import { unavailableServerHost } from './infrastructure/providers/no-server-host.js';
 import { cloudflareHosting } from './infrastructure/providers/cloudflare.js';
 import { githubCodeHost } from './infrastructure/providers/github.js';
 import { httpLinkChecker } from './infrastructure/providers/links.js';
@@ -57,6 +59,11 @@ const app = createApp({
     databases: [neon],
     links: httpLinkChecker(fetch),
   },
+  serverHost: config.AGENT37_API_KEY
+    ? agent37Host({ apiKey: config.AGENT37_API_KEY, fetch })
+    : unavailableServerHost(),
+  serverBudgetMicros: Math.round(config.PONO_SERVER_BUDGET_USD * 1_000_000),
+  serverIdleSeconds: config.PONO_SERVER_IDLE_MINUTES * 60,
   now: () => new Date(),
 });
 
