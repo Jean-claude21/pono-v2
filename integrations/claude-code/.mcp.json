@@ -1,0 +1,9 @@
+{
+  "mcpServers": {
+    "pono": {
+      "type": "http",
+      "url": "${PONO_URL}/mcp",
+      "headers": { "Authorization": "Bearer ${PONO_TOKEN}" }
+    }
+  }
+}

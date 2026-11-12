@@ -32,6 +32,11 @@ export interface CodeHost {
   ): Promise<Repository>;
   /** The file names of a folder at a ref; empty when the folder does not exist. */
   listDirectory(credential: string, fullName: string, path: string, ref: string): Promise<string[]>;
+  /**
+   * How a server reaches the repository with git, for one command at a time (D-020): its address
+   * and an HTTP header to pass with `git -c http.extraHeader=…`. Never written into a git config.
+   */
+  gitAccess(credential: string, fullName: string): { url: string; header: string };
   /** Lets the repository serve as a starter that other repositories are generated from. */
   markAsTemplate(credential: string, fullName: string): Promise<void>;
   /** Open proposals (pull requests) towards the default branch (phase 5). */

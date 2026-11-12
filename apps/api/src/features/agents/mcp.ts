@@ -16,6 +16,7 @@ import {
 } from '../catalog/index.js';
 import { launchProject, type LaunchDeps } from '../launch/index.js';
 import { siteMetrics } from '../analytics/index.js';
+import { devStatus, pullChanges, pushChanges, startDev, stopDev } from '../devloop/index.js';
 import { checkSecrets, listVariables, requestVariable, variableName } from '../variables/index.js';
 import { activeCredentials } from '../connections/index.js';
 import { LEVEL_GUIDANCE, LEVELS, levelOf, setLevel } from '../identity/index.js';
@@ -287,6 +288,64 @@ function buildServer(deps: McpDeps, actor: Actor, scope: 'read' | 'act'): McpSer
         await proposeSharing(deps, actor, kind, name);
         return { proposed: true, kind, name };
       }),
+  );
+
+  server.registerTool(
+    'start_dev',
+    {
+      description:
+        "Starts (or restarts) the project's dev server on its Pono server: repository fetched on `dev`, installed, run, its port published. Answers the preview address; it reloads by itself as files change.",
+      inputSchema: { projectId: z.string() },
+      annotations: act,
+    },
+    async ({ projectId }) => acting(() => startDev(deps, actor, projectId)),
+  );
+
+  server.registerTool(
+    'dev_status',
+    {
+      description:
+        "The dev server: phase (installing, running…), what its port answers, branch and commit, changed files, the preview address and the logs' last lines. Show the preview address to the person.",
+      inputSchema: { projectId: z.string(), lines: z.number().int().min(1).max(200).default(20) },
+      annotations: read,
+    },
+    async ({ projectId, lines }) => guard(() => devStatus(deps, actor, projectId, lines)),
+  );
+
+  server.registerTool(
+    'stop_dev',
+    {
+      description: "Stops the project's dev server; the files stay.",
+      inputSchema: { projectId: z.string() },
+      annotations: act,
+    },
+    async ({ projectId }) =>
+      acting(async () => {
+        await stopDev(deps, actor, projectId);
+        return { stopped: true };
+      }),
+  );
+
+  server.registerTool(
+    'pull_changes',
+    {
+      description:
+        'Takes onto the server what was pushed to `dev` elsewhere (for example from your own machine); the dev server reloads.',
+      inputSchema: { projectId: z.string() },
+      annotations: act,
+    },
+    async ({ projectId }) => acting(() => pullChanges(deps, actor, projectId)),
+  );
+
+  server.registerTool(
+    'push_changes',
+    {
+      description:
+        "Commits what changed on the server and pushes it to `dev`, after Pono's secrets check: a finding stops the push. Production is reached only by a proposal, under the project's release rule.",
+      inputSchema: { projectId: z.string(), message: z.string().min(1).max(200) },
+      annotations: act,
+    },
+    async ({ projectId, message }) => acting(() => pushChanges(deps, actor, projectId, message)),
   );
 
   server.registerTool(

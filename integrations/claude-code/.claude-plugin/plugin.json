@@ -1,0 +1,6 @@
+{
+  "name": "pono",
+  "version": "0.1.0",
+  "description": "Pono in Claude Code: your project's server, preview address, dev status and release rule, known at every session.",
+  "author": { "name": "Pono" }
+}

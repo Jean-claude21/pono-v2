@@ -79,6 +79,18 @@ export function fakeServerHost(w: World): ProjectServerHost {
     async destroy(id) {
       w.servers.delete(id);
     },
+    publicHostSuffix: '.servers.test',
+    async run(id, command) {
+      w.commands.push({ id, command, background: false });
+      return w.shell(command);
+    },
+    async start(id, command) {
+      w.commands.push({ id, command, background: true });
+      return { pid: 4242 };
+    },
+    async publishPort(id, port) {
+      return { url: `https://${id}-${port}.servers.test` };
+    },
   };
 }
 
@@ -124,6 +136,9 @@ export interface World {
   proposalFiles: Map<string, ChangedFile[]>;
   statuses: { fullName: string; sha: string; state: string }[];
   merged: string[];
+  /** Commands sent to project servers, and how the fake shell answers them. */
+  commands: { id: string; command: string; background: boolean }[];
+  shell: (command: string) => { exitCode: number; stdout: string; stderr: string };
   /** Analytics sites in memory: id → stats served. */
   analyticsSites: Map<string, { name: string; pageviews: number }>;
   /** Repositories marked as starters. */
@@ -150,6 +165,8 @@ export function world(): World {
     proposalFiles: new Map(),
     statuses: [],
     merged: [],
+    commands: [],
+    shell: () => ({ exitCode: 0, stdout: '', stderr: '' }),
     analyticsSites: new Map(),
     templates: new Set(),
     opened: new Map(),
@@ -194,6 +211,12 @@ export function fakeAdapters(w: World): AppDeps['adapters'] {
       return Object.keys(w.files.get(fullName) ?? {})
         .filter((f) => f.startsWith(prefix) && !f.slice(prefix.length).includes('/'))
         .map((f) => f.slice(prefix.length));
+    },
+    gitAccess(credential, fullName) {
+      return {
+        url: `https://code.test/${fullName}.git`,
+        header: `AUTHORIZATION: basic ${Buffer.from(credential).toString('base64')}`,
+      };
     },
     async markAsTemplate(_c, fullName) {
       w.templates.add(fullName);

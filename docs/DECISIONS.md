@@ -257,3 +257,30 @@ arrive ») et D-006.
 - Les variables de développement sont tapées par une personne, scellées, envoyées au seul serveur
   du projet au démarrage. Un agent ne voit que des noms et peut en demander un.
 - Les noms `PONO_` sont réservés à Pono.
+
+---
+
+## D-020 — La boucle de dev tourne sur le serveur du projet, Pono tient git
+
+**Tranché le 2026-11-12.**
+
+- Le dépôt est cloné sur le serveur du projet, sur `dev`. Pono lance le serveur de dev de la stack et
+  publie son port : le rechargement à chaud est celui de la stack, à travers l'adresse publique.
+- Pono fait les opérations git (récupérer, pousser) : l'accès passe par un en-tête donné pour une
+  seule commande, jamais écrit dans une configuration git ni sur le disque. En attendant
+  l'application GitHub, c'est la clé de la personne ; ensuite, un jeton d'une heure limité au dépôt.
+- Toute poussée passe par le contrôle des secrets, et ne va que vers `dev`.
+- Une poussée vers `dev` faite ailleurs revient sur le serveur, par l'outil ou par un webhook signé.
+
+**Ce que ça coûte.** Le temps d'une commande, la clé est dans la ligne de commande du serveur du
+projet — un serveur de la personne elle-même.
+
+---
+
+## D-021 — Dans l'agent de code, Pono se dit sans qu'on le demande
+
+**Tranché le 2026-11-12.**
+
+Un plugin Claude Code donne le serveur MCP de Pono, le contexte du projet à chaque début de session,
+une ligne de statut et des commandes. Pour Codex : le serveur MCP et `AGENTS.md`. Le script ne bloque
+jamais une session : sans Pono joignable, il se tait.
