@@ -1,6 +1,7 @@
 import { Hono, type MiddlewareHandler } from 'hono';
 import { deleteCookie, getCookie, setCookie } from 'hono/cookie';
 import { randomBytes } from 'node:crypto';
+import { z } from 'zod';
 import type { AppEnv } from '../../platform/context.js';
 import { withOrganization, type Pool } from '../../platform/db.js';
 import { AppError } from '../../platform/errors.js';
@@ -138,18 +139,59 @@ export function authRoutes(deps: IdentityDeps): Hono<AppEnv> {
     });
 }
 
-/** `/v1/me`: who is signed in, and where they act. */
+export const LEVELS = ['guided', 'choosing', 'expert'] as const;
+export type Level = (typeof LEVELS)[number];
+
+/** What an agent does at each level (D-015): the same words in the console and over MCP. */
+export const LEVEL_GUIDANCE: Record<Level | 'unknown', string> = {
+  guided:
+    'The person wants it done for them: ask only about their need, in their words, never about technology. Choose the template on Pono’s base yourself, launch, and explain what you did in plain words.',
+  choosing:
+    'The person wants to choose a little: offer two or three templates and a few options (payment, accounts, database), in plain words, then launch what they pick.',
+  expert:
+    'The person knows what they do: their technology and their architecture come first. Offer adopt_project for an existing repository; Pono’s architecture and design skills stay off unless they turn them on.',
+  unknown:
+    'The person has not said how much they want to decide. Ask in one question whether they want you to handle everything, to choose among a few options, or to bring their own technology; save the answer with set_level.',
+};
+
+export async function levelOf(pool: Pool, personId: string): Promise<Level | null> {
+  const { rows } = await pool.query<{ level: Level | null }>('SELECT person_level($1) AS level', [
+    personId,
+  ]);
+  return rows[0]?.level ?? null;
+}
+
+export async function setLevel(pool: Pool, personId: string, level: Level): Promise<void> {
+  await pool.query('SELECT set_person_level($1, $2)', [personId, level]);
+}
+
+/** `/v1/me`: who is signed in, where they act, and how much they want to decide. */
 export function meRoutes(deps: Pick<IdentityDeps, 'pool'> & { admins?: string[] }): Hono<AppEnv> {
-  return new Hono<AppEnv>().get('/', async (c) => {
-    const actor = c.var.actor;
-    const orgs = await deps.pool.query<{ id: string; name: string; role: string }>(
-      'SELECT id, name, role FROM organizations_of($1)',
-      [actor.personId],
-    );
-    return c.json({
-      person: { id: actor.personId, login: actor.login, name: actor.name },
-      organization: orgs.rows.find((o) => o.id === actor.organizationId) ?? null,
-      isAdmin: (deps.admins ?? []).includes(actor.login),
+  return new Hono<AppEnv>()
+    .get('/', async (c) => {
+      const actor = c.var.actor;
+      const orgs = await deps.pool.query<{ id: string; name: string; role: string }>(
+        'SELECT id, name, role FROM organizations_of($1)',
+        [actor.personId],
+      );
+      return c.json({
+        person: {
+          id: actor.personId,
+          login: actor.login,
+          name: actor.name,
+          level: await levelOf(deps.pool, actor.personId),
+        },
+        organization: orgs.rows.find((o) => o.id === actor.organizationId) ?? null,
+        isAdmin: (deps.admins ?? []).includes(actor.login),
+      });
+    })
+    .put('/level', async (c) => {
+      const body = z
+        .object({ level: z.enum(LEVELS) })
+        .safeParse(await c.req.json().catch(() => null));
+      if (!body.success)
+        throw new AppError('request.invalid', 400, 'Expected guided, choosing or expert.');
+      await setLevel(deps.pool, c.var.actor.personId, body.data.level);
+      return c.body(null, 204);
     });
-  });
 }

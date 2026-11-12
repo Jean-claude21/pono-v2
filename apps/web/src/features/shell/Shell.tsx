@@ -2,6 +2,7 @@ import type { ReactNode } from 'react';
 import { api, useApi, type Me } from '@/lib/api';
 import { label } from '@/lib/labels';
 import * as m from '@/paraglide/messages.js';
+import { LevelChooser } from './LevelChooser';
 import { LocaleSwitch } from './LocaleSwitch';
 import { SignIn } from './SignIn';
 
@@ -39,6 +40,16 @@ export function Shell({ section, children }: Readonly<{ section: Section; childr
     return <p className="page">{label('error', me.result.error.code)}</p>;
   }
   const { person, isAdmin } = me.result.data;
+  if (person.level === null)
+    return (
+      <div className="auth">
+        <div className="auth-box" style={{ maxWidth: 880 }}>
+          <h1>{m.level_title()}</h1>
+          <p className="soft mt-sm">{m.level_body()}</p>
+          <LevelChooser current={null} onChosen={me.reload} />
+        </div>
+      </div>
+    );
   const signOut = async () => {
     await api('/auth/sign-out', { method: 'POST' });
     window.location.assign('/');

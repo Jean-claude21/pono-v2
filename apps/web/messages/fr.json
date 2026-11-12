@@ -327,5 +327,17 @@
   "action_manifest_read": "pono.yaml lu",
   "action_manifest_invalid": "pono.yaml illisible",
   "action_skills_proposed": "skills proposés",
-  "error_skill_not_found": "Ce skill n'existe pas."
+  "error_skill_not_found": "Ce skill n'existe pas.",
+  "level_title": "Comment veux-tu travailler ?",
+  "level_body": "Tes agents suivront la même réponse. Tu peux la changer à tout moment dans les réglages.",
+  "level_guided": "Fais tout pour moi",
+  "level_guided_body": "Tu décris ton besoin, Pono choisit la technologie et le template et lance le projet.",
+  "level_choosing": "Je veux choisir un peu",
+  "level_choosing_body": "Pono te propose deux ou trois templates et quelques options, tu choisis.",
+  "level_expert": "Je sais ce que je fais",
+  "level_expert_body": "Ta technologie, ton architecture, tes skills. Pono garde le cadre : coûts, serveur, mise en ligne.",
+  "level_choose": "Choisir",
+  "settings_level": "Ta façon de travailler",
+  "signin_why_github": "Pono passe par GitHub : ton compte et tes dépôts sont reliés en une fois, et tes projets restent chez toi.",
+  "signin_no_github": "Pas encore de compte GitHub ? En créer un (gratuit)"
 }

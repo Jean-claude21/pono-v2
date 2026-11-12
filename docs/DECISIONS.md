@@ -184,3 +184,19 @@ faire »).
   Pono ne s'imposent qu'aux projets lancés depuis un template.
 
 **Ce qui la renverserait.** Un besoin de configuration que YAML exprime mal (logique, héritage).
+
+---
+
+## D-015 — Trois niveaux, et GitHub comme porte d'entrée
+
+**Tranché le 2026-11-12.**
+
+- Trois niveaux : **guidé** (Pono choisit tout sur sa base), **au choix** (deux ou trois templates
+  et quelques options), **expert** (sa technologie, son architecture). Le niveau appartient à la
+  personne ; la console et les agents lisent la même réponse.
+- On entre par GitHub : la connexion relie le compte et les dépôts en un geste, puisque chaque
+  projet vit dans un dépôt de la personne. Celui qui n'a pas de compte est guidé vers la création
+  d'un compte gratuit.
+
+**Ce que ça coûte.** Une personne sans GitHub fait un pas de plus. **Ce qui la renverserait.** Un
+public qui ne veut pas de code chez lui : un dépôt hébergé par Pono deviendrait alors nécessaire.
