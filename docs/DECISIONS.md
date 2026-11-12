@@ -229,3 +229,17 @@ faudrait alors des relecteurs de confiance, ou une analyse automatique en premie
 - Chaque personne connecte son propre compte ; Pono lit, il ne garde aucune donnée de visite.
 - Un projet lancé reçoit son site dès le premier jour ; le site est nommé dans `pono.yaml`.
 - La console de Pono se compte avec Umami, sans cookie, jamais sur les pages de l'exploitant.
+
+---
+
+## D-018 — Les tâches de fond sur pg-boss, Coolify pour le reste
+
+**Tranché le 2026-11-12**, en appliquant D-002 (pg-boss « quand la première tâche périodique
+arrive ») et D-006.
+
+- Un cycle toutes les 15 minutes, file singleton : serveurs, projets, consommation, retour arrière
+  automatique, alertes. Il agit au canal `system`, pour aucune personne, et ne peut ni valider, ni
+  changer un mode.
+- Les alertes partent par email (Resend), avec la clé de Pono ; une alerte n'est envoyée qu'une fois.
+- Coolify héberge ce que Netlify et Cloudflare ne font pas tourner. N'ayant pas de retour arrière,
+  il est épinglé au commit précédent ; il le reste jusqu'à ce qu'une personne le remette à HEAD.

@@ -20,7 +20,8 @@ export async function record(client: Client, entry: JournalEntry): Promise<void>
       entry.organizationId,
       entry.projectId ?? null,
       entry.action,
-      entry.actorPerson,
+      // Pono's own tasks act for no person (principle 9: who, through what).
+      entry.channel === 'system' ? null : entry.actorPerson,
       entry.channel,
       entry.detail ?? {},
     ],

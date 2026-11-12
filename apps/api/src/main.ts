@@ -1,7 +1,11 @@
+import { coolifyHosting } from './infrastructure/providers/coolify.js';
+import { resendNotifier } from './infrastructure/providers/resend.js';
+import { startJobs } from './features/operations/index.js';
+import { serversUsage } from './features/servers/index.js';
 import { posthogAnalytics } from './infrastructure/providers/posthog.js';
 import { umamiCloud, umamiSelfHosted } from './infrastructure/providers/umami.js';
 import { serve } from '@hono/node-server';
-import { createApp } from './app.js';
+import { createApp, type AppDeps } from './app.js';
 import { loadCatalog } from './features/catalog/index.js';
 import { devIdentity, githubIdentity, type IdentityProvider } from './features/identity/index.js';
 import { agent37Account, agent37Host } from './infrastructure/providers/agent37.js';
@@ -43,6 +47,7 @@ if (config.PONO_DEV_SIGN_IN === '1') identity.push(devIdentity());
 
 const github = githubCodeHost(fetch);
 const netlify = netlifyHosting(fetch);
+const coolify = coolifyHosting(fetch);
 const cloudflare = cloudflareHosting(fetch);
 const neon = neonDatabase(fetch);
 const openai = openaiUsage(fetch);
@@ -50,13 +55,13 @@ const umami = umamiCloud(fetch);
 const umamiSelf = umamiSelfHosted(fetch);
 const posthog = posthogAnalytics(fetch);
 
-const app = createApp({
+const deps: AppDeps = {
   pool: createPool(config.PONO_DATABASE_URL),
   sealer: new Sealer(config.PONO_SECRETS_KEY),
   publicUrl: config.PONO_PUBLIC_URL,
   secureCookies: config.NODE_ENV === 'production',
   identity,
-  connectable: [github, netlify, cloudflare, neon, openai, umami, umamiSelf, posthog],
+  connectable: [github, netlify, cloudflare, coolify, neon, openai, umami, umamiSelf, posthog],
   analytics: [umami, umamiSelf, posthog],
   usageSources: [
     githubUsage(fetch),
@@ -67,7 +72,7 @@ const app = createApp({
   ],
   adapters: {
     codeHosts: [github],
-    hostings: [netlify, cloudflare],
+    hostings: [netlify, cloudflare, coolify],
     databases: [neon],
     links: httpLinkChecker(fetch),
   },
@@ -103,7 +108,25 @@ const app = createApp({
     ? { serverAccount: agent37Account({ apiKey: config.AGENT37_API_KEY, fetch }) }
     : {}),
   now: () => new Date(),
-});
+};
+const app = createApp(deps);
+
+// Pono's periodic task (D-018): every workshop read again, automatic rollbacks, alerts by email.
+if (config.PONO_JOBS === '1' && config.PONO_DATABASE_OWNER_URL) {
+  const notifier =
+    config.RESEND_API_KEY && config.PONO_ALERTS_FROM
+      ? resendNotifier({ apiKey: config.RESEND_API_KEY, from: config.PONO_ALERTS_FROM, fetch })
+      : undefined;
+  void startJobs(config.PONO_DATABASE_OWNER_URL, {
+    ...deps,
+    internalUsage: [serversUsage()],
+    publicUrl: config.PONO_PUBLIC_URL,
+    ...(notifier ? { notifier } : {}),
+  }).then(
+    () => console.log(`Periodic task on (alerts by email: ${notifier ? 'yes' : 'no'})`),
+    (error: Error) => console.error(`Periodic task not started: ${error.message}`),
+  );
+}
 
 serve({ fetch: app.fetch, port: config.PONO_API_PORT }, (info) => {
   console.log(

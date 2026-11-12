@@ -4,7 +4,19 @@ export interface Actor {
   login: string;
   name: string | null;
   organizationId: string;
-  channel: 'console' | 'mcp';
+  /** `system`: Pono's own periodic tasks, which act for no person. */
+  channel: 'console' | 'mcp' | 'system';
+}
+
+/** The actor of Pono's periodic tasks in one organization. */
+export function systemActor(organizationId: string): Actor {
+  return {
+    personId: '00000000-0000-0000-0000-000000000000',
+    login: 'pono',
+    name: 'Pono',
+    organizationId,
+    channel: 'system',
+  };
 }
 
 export interface AppEnv {

@@ -29,6 +29,10 @@ const schema = z.object({
   /** The API's own address, for development billing. */
   PONO_API_URL: z.url().default('http://localhost:8787'),
   PONO_SERVER_IDLE_MINUTES: z.coerce.number().int().min(5).default(30),
+  // Periodic tasks (D-018): on when the owner URL is set, unless turned off.
+  PONO_JOBS: z.enum(['0', '1']).default('1'),
+  RESEND_API_KEY: z.string().min(1).optional(),
+  PONO_ALERTS_FROM: z.string().min(3).optional(),
 });
 
 export type Config = z.infer<typeof schema>;

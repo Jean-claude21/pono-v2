@@ -262,6 +262,7 @@ export function fakeAdapters(w: World): AppDeps['adapters'] {
 
 export interface TestApp {
   app: ReturnType<typeof createApp>;
+  deps: AppDeps;
   pool: Pool;
   world: World;
   now: { value: Date };
@@ -271,7 +272,7 @@ export function testApp(): TestApp {
   const pool = createPool(inject('appUrl'));
   const w = world();
   const now = { value: new Date('2026-11-12T12:00:00Z') };
-  const app: ReturnType<typeof createApp> = createApp({
+  const deps: AppDeps = {
     pool,
     sealer: new Sealer(randomBytes(32).toString('base64')),
     publicUrl: PUBLIC_URL,
@@ -301,8 +302,9 @@ export function testApp(): TestApp {
     }),
     admins: ['operator'],
     now: () => now.value,
-  });
-  return { app, pool, world: w, now };
+  };
+  const app: ReturnType<typeof createApp> = createApp(deps);
+  return { app, deps, pool, world: w, now };
 }
 
 function cookieOf(response: Response, name: string): string | null {
