@@ -1,0 +1,19 @@
+{
+  "$schema": "https://inlang.com/schema/inlang-message-format",
+  "meta_title": "Atelier · Pono",
+  "meta_description": "Tous tes projets construits par agent, au même endroit.",
+  "rail_workshop": "Atelier",
+  "rail_projects": "Projets",
+  "rail_usage": "Consommation",
+  "rail_servers": "Serveurs",
+  "rail_catalog": "Templates et skills",
+  "rail_organization": "Organisation",
+  "rail_services": "Abonnements et services",
+  "rail_agents": "Agents",
+  "rail_settings": "Réglages",
+  "rail_soon": "bientôt",
+  "projects_title": "Projets",
+  "projects_empty_title": "Aucun projet pour l’instant.",
+  "projects_empty_body": "Connecte ton code pour importer tes projets, ou lance-en un depuis ta conversation.",
+  "locale_label": "Langue"
+}

@@ -45,9 +45,9 @@ solution prête pour un cas précis.
 
 ## Comment reconnaître l'accomplissement
 
-| Indicateur | Seuil |
-|---|---|
-| **Temps entre « je veux ce projet » et « je vois mon premier lien qui marche »** | l'indicateur unique, mesuré à chaque lancement |
-| Écart entre le total affiché et les factures réelles du mois | nul sur ce qui est mesuré, signalé sur le reste |
-| Mises en production hors de la règle choisie | zéro |
-| Usage après 30 jours | les premiers utilisateurs s'en servent encore |
+| Indicateur                                                                       | Seuil                                           |
+| -------------------------------------------------------------------------------- | ----------------------------------------------- |
+| **Temps entre « je veux ce projet » et « je vois mon premier lien qui marche »** | l'indicateur unique, mesuré à chaque lancement  |
+| Écart entre le total affiché et les factures réelles du mois                     | nul sur ce qui est mesuré, signalé sur le reste |
+| Mises en production hors de la règle choisie                                     | zéro                                            |
+| Usage après 30 jours                                                             | les premiers utilisateurs s'en servent encore   |

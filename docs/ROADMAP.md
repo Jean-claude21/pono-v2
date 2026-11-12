@@ -11,13 +11,13 @@ conversation sur un serveur prêt, et la production obéit à la règle qu'il a 
 
 ## Matrice des surfaces
 
-| Surface | Décision de la personne | Données | Action réelle | Preuve |
-|---|---|---|---|---|
-| Console · projets | lequel reprendre | projet, environnement, déploiement | ouvrir un lien qui marche | les projets réels de l'auteur, état juste |
-| Console · consommation | quoi couper, quoi surveiller | abonnement, relevé | alerte avant épuisement | total du mois comparé aux factures |
-| MCP | agir sans quitter la conversation | les mêmes | les mêmes outils | Claude Code reconnaît « on continue X » |
-| Console · serveurs | lancer, mettre en veille | serveur de projet | serveur alloué, limite tenue | premier lien mesuré |
-| Console · mise en ligne | valider, ou laisser faire | proposition, verdict, mode | production déployée | un refus, une validation, un automatique |
+| Surface                 | Décision de la personne           | Données                            | Action réelle                | Preuve                                    |
+| ----------------------- | --------------------------------- | ---------------------------------- | ---------------------------- | ----------------------------------------- |
+| Console · projets       | lequel reprendre                  | projet, environnement, déploiement | ouvrir un lien qui marche    | les projets réels de l'auteur, état juste |
+| Console · consommation  | quoi couper, quoi surveiller      | abonnement, relevé                 | alerte avant épuisement      | total du mois comparé aux factures        |
+| MCP                     | agir sans quitter la conversation | les mêmes                          | les mêmes outils             | Claude Code reconnaît « on continue X »   |
+| Console · serveurs      | lancer, mettre en veille          | serveur de projet                  | serveur alloué, limite tenue | premier lien mesuré                       |
+| Console · mise en ligne | valider, ou laisser faire         | proposition, verdict, mode         | production déployée          | un refus, une validation, un automatique  |
 
 ---
 

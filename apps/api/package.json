@@ -1,0 +1,22 @@
+{
+  "name": "@pono/api",
+  "private": true,
+  "type": "module",
+  "description": "Pono's API (D-002): the one door for the console, MCP and agents.",
+  "scripts": {
+    "dev": "tsx watch src/main.ts",
+    "start": "tsx src/main.ts",
+    "db:migrate": "tsx src/platform/migrate-cli.ts",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@hono/node-server": "^2.1.3",
+    "hono": "^4.13.12",
+    "pg": "^8.23.0",
+    "zod": "^4.6.6"
+  },
+  "devDependencies": {
+    "@types/pg": "^8.23.1",
+    "tsx": "^4.23.15"
+  }
+}

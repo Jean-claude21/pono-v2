@@ -6,22 +6,24 @@ Classement : `fait vérifié` · `observation` · `hypothèse` · `promesse cont
 
 ## Faits vérifiés
 
-| Fait | Preuve | Date |
-|---|---|---|
+| Fait                                                                                                                                                                                                                                                                                   | Preuve                                                    | Date       |
+| -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------- | ---------- |
+| Deux organisations sont étanches : aucune ligne de l'une n'est lisible depuis l'autre, rien n'est lisible sans organisation, l'écriture chez l'autre est refusée, le rôle applicatif ne peut ni créer une organisation hors de `create_organization` ni désactiver le RLS (001 SC-002) | `apps/api/tests/isolation.test.ts`, sur Postgres 17 local | 2026-11-12 |
+| La console s'affiche en français et en anglais, le choix tient après rechargement, sans texte en dur (001 SC-003)                                                                                                                                                                      | navigateur ; `pnpm check:strings`                         | 2026-11-12 |
 
 ## Repris de l'ancien Pono (à reprouver ici)
 
-| Fait | Source |
-|---|---|
+| Fait                                                                                              | Source                                  |
+| ------------------------------------------------------------------------------------------------- | --------------------------------------- |
 | Une migration destructrice est détectable et sa fusion bloquable par une vérification obligatoire | ancien Pono, lectio-reads#3, 2026-09-23 |
-| Claude Code se relie à un serveur MCP qui porte son propre serveur d'autorisation | ancien Pono, 2026-09-26 |
+| Claude Code se relie à un serveur MCP qui porte son propre serveur d'autorisation                 | ancien Pono, 2026-09-26                 |
 
 ## Hypothèses — à prouver avant d'en parler
 
-| Hypothèse | Comment on la tranchera |
-|---|---|
-| Lancer un projet depuis un template prend quelques minutes jusqu'au premier lien | chronométrage à chaque lancement |
-| Voir le total de ses abonnements change ce qu'on garde | observation des premiers utilisateurs |
+| Hypothèse                                                                        | Comment on la tranchera               |
+| -------------------------------------------------------------------------------- | ------------------------------------- |
+| Lancer un projet depuis un template prend quelques minutes jusqu'au premier lien | chronométrage à chaque lancement      |
+| Voir le total de ses abonnements change ce qu'on garde                           | observation des premiers utilisateurs |
 
 ## Interdit d'affirmer aujourd'hui
 

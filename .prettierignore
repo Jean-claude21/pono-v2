@@ -1,0 +1,8 @@
+pnpm-lock.yaml
+packages/design/
+.specify/
+.claude/
+**/routeTree.gen.ts
+**/.output/
+**/dist/
+apps/web/src/paraglide/
