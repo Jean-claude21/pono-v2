@@ -12,3 +12,4 @@ coverage/
 apps/web/src/paraglide/
 test-results/
 playwright-report/
+.pono-dev-db/

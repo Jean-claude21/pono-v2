@@ -1,0 +1,79 @@
+[
+  {
+    "id": "blank",
+    "category": "free",
+    "name": { "fr": "Projet vide", "en": "Empty project" },
+    "description": {
+      "fr": "Une stack posée, rien d’autre. Ton agent construit librement.",
+      "en": "A stack in place, nothing else. Your agent builds freely."
+    },
+    "stack": ["Hono", "TanStack Start", "Neon"],
+    "skills": ["pono-basics", "safe-migrations", "no-secrets"]
+  },
+  {
+    "id": "booking",
+    "category": "services",
+    "name": { "fr": "Prise de rendez-vous", "en": "Booking" },
+    "description": {
+      "fr": "Agenda, créneaux, rappels par email, acompte en ligne.",
+      "en": "Calendar, slots, email reminders, online deposit."
+    },
+    "stack": ["TanStack Start", "Neon", "Cloudflare"],
+    "skills": ["pono-basics", "safe-migrations", "no-secrets", "auth", "payments", "emails"]
+  },
+  {
+    "id": "shop",
+    "category": "commerce",
+    "name": { "fr": "Boutique en ligne", "en": "Online shop" },
+    "description": {
+      "fr": "Catalogue, panier, paiement, suivi des commandes, back-office.",
+      "en": "Catalogue, cart, payment, order tracking, back office."
+    },
+    "stack": ["TanStack Start", "Neon", "Stripe"],
+    "skills": ["pono-basics", "safe-migrations", "no-secrets", "auth", "payments", "emails"]
+  },
+  {
+    "id": "pos",
+    "category": "commerce",
+    "name": { "fr": "Caisse et stock", "en": "Till and stock" },
+    "description": {
+      "fr": "Ventes au comptoir, stock, alertes de rupture, export comptable.",
+      "en": "Counter sales, stock, out-of-stock alerts, accounting export."
+    },
+    "stack": ["TanStack Start", "Neon"],
+    "skills": ["pono-basics", "safe-migrations", "no-secrets", "auth", "exports"]
+  },
+  {
+    "id": "saas",
+    "category": "software",
+    "name": { "fr": "SaaS avec abonnements", "en": "SaaS with subscriptions" },
+    "description": {
+      "fr": "Comptes, équipes, abonnements, tableau de bord, emails.",
+      "en": "Accounts, teams, subscriptions, dashboard, emails."
+    },
+    "stack": ["Hono", "TanStack Start", "Neon", "Stripe"],
+    "skills": ["pono-basics", "safe-migrations", "no-secrets", "auth", "payments", "emails"]
+  },
+  {
+    "id": "site",
+    "category": "presence",
+    "name": { "fr": "Site vitrine", "en": "Showcase site" },
+    "description": {
+      "fr": "Pages, blog, formulaire de contact, référencement.",
+      "en": "Pages, blog, contact form, search visibility."
+    },
+    "stack": ["TanStack Start", "Cloudflare"],
+    "skills": ["pono-basics", "no-secrets", "seo", "emails"]
+  },
+  {
+    "id": "internal",
+    "category": "software",
+    "name": { "fr": "Outil interne", "en": "Internal tool" },
+    "description": {
+      "fr": "Tableaux, formulaires, rôles, import CSV, journal des actions.",
+      "en": "Tables, forms, roles, CSV import, action log."
+    },
+    "stack": ["Hono", "TanStack Start", "Neon"],
+    "skills": ["pono-basics", "safe-migrations", "no-secrets", "auth", "exports"]
+  }
+]

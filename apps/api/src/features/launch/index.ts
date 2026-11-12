@@ -1,0 +1,165 @@
+import { Hono } from 'hono';
+import { z } from 'zod';
+import type { Actor, AppEnv } from '../../platform/context.js';
+import { withOrganization } from '../../platform/db.js';
+import { AppError } from '../../platform/errors.js';
+import { ProviderError } from '../../platform/http.js';
+import type { Catalog } from '../catalog/index.js';
+import { activeCredentials } from '../connections/index.js';
+import { record } from '../journal/index.js';
+import { importProject, type ProjectsDeps } from '../projects/application.js';
+import {
+  allocateServer,
+  serversView,
+  type Agent,
+  type ServersDeps,
+  type ServerView,
+} from '../servers/index.js';
+
+export interface LaunchDeps extends ProjectsDeps, ServersDeps {
+  catalog: Catalog;
+}
+
+export interface LaunchInput {
+  template: string;
+  name: string;
+  agent: Agent;
+  private: boolean;
+  sleepServerId?: string;
+}
+
+export interface Launched {
+  projectId: string;
+  repository: string;
+  server: ServerView;
+  /** From the request to the server answering: the product's one indicator (MANDAT). */
+  durationMs: number;
+}
+
+/** The manifest written at the root of every launched project: the truth lives in the repository. */
+export function manifest(input: {
+  name: string;
+  template: string;
+  skills: string[];
+  agent: Agent;
+}): string {
+  return [
+    `# Pono manifest: the project's truth, kept in its own repository.`,
+    `name: ${input.name}`,
+    `template: ${input.template}`,
+    `agent: ${input.agent}`,
+    `skills:`,
+    ...input.skills.map((s) => `  - ${s}`),
+    `release:`,
+    `  mode: ask`,
+    `declared_destructions: []`,
+    '',
+  ].join('\n');
+}
+
+/**
+ * One sentence, and the project exists: a repository in the person's account with its manifest,
+ * the project in the workshop, and its server with the template's skills (phase 4 and 6).
+ * The place is checked first, so nothing is created when the plan is full.
+ */
+export async function launchProject(
+  deps: LaunchDeps,
+  actor: Actor,
+  input: LaunchInput,
+): Promise<Launched> {
+  const started = Date.now();
+  const template = deps.catalog.templates.find((t) => t.id === input.template);
+  if (!template) throw new AppError('template.not_found', 404, 'No such template.');
+
+  await withOrganization(deps.pool, actor.organizationId, async (client) => {
+    const { limit, active, servers } = await serversView(client);
+    if (active >= limit && !input.sleepServerId) {
+      throw new AppError(
+        'servers.limit_reached',
+        409,
+        'Every active server of the plan is taken.',
+        {
+          limit,
+          active: servers
+            .filter(
+              (s) => s.status === 'running' || s.status === 'provisioning' || s.status === 'waking',
+            )
+            .map((s) => ({ id: s.id, projectName: s.projectName })),
+        },
+      );
+    }
+  });
+
+  const creds = await withOrganization(deps.pool, actor.organizationId, (client) =>
+    activeCredentials(client, deps.sealer, 'code_host'),
+  );
+  const host = deps.adapters.codeHosts.find((h) => creds.some((c) => c.provider === h.id));
+  const credential = creds.find((c) => c.provider === host?.id)?.credential;
+  if (!host || !credential)
+    throw new AppError('connection.code_host_missing', 409, 'Connect your code host first.');
+
+  let repository;
+  try {
+    repository = await host.createRepository(credential, {
+      name: input.name,
+      private: input.private,
+      description: template.description.en,
+      files: {
+        'pono.yaml': manifest({
+          name: input.name,
+          template: template.id,
+          skills: template.skills,
+          agent: input.agent,
+        }),
+      },
+    });
+  } catch (error) {
+    if (error instanceof ProviderError && error.status === 409)
+      throw new AppError('launch.name_taken', 409, 'A repository of that name exists.');
+    throw error;
+  }
+
+  const projectId = await importProject(deps, actor, repository.fullName);
+  const server = await allocateServer(deps, actor, projectId, {
+    agent: input.agent,
+    env: { PONO_SKILLS: template.skills.join(','), PONO_TEMPLATE: template.id },
+    ...(input.sleepServerId ? { sleepServerId: input.sleepServerId } : {}),
+  });
+  const durationMs = Date.now() - started;
+  await withOrganization(deps.pool, actor.organizationId, (client) =>
+    record(client, {
+      organizationId: actor.organizationId,
+      projectId,
+      action: 'project.launched',
+      actorPerson: actor.personId,
+      channel: actor.channel,
+      detail: { template: template.id, durationMs },
+    }),
+  );
+  return { projectId, repository: repository.fullName, server, durationMs };
+}
+
+export const launchBody = z.object({
+  template: z.string().min(1),
+  name: z.string().regex(/^[a-z0-9][a-z0-9-]{1,38}$/),
+  agent: z.enum(['claude-code', 'codex', 'opencode', 'none']).default('claude-code'),
+  private: z.boolean().default(true),
+  sleepServerId: z.uuid().optional(),
+});
+
+/** `POST /v1/launch`. */
+export function launchRoutes(deps: LaunchDeps): Hono<AppEnv> {
+  return new Hono<AppEnv>().post('/', async (c) => {
+    const body = launchBody.safeParse(await c.req.json().catch(() => null));
+    if (!body.success)
+      throw new AppError('request.invalid', 400, 'Expected a template and a name in lowercase.');
+    const { sleepServerId, ...rest } = body.data;
+    return c.json(
+      await launchProject(deps, c.var.actor, {
+        ...rest,
+        ...(sleepServerId ? { sleepServerId } : {}),
+      }),
+      201,
+    );
+  });
+}

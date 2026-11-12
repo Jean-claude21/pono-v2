@@ -1,6 +1,6 @@
 # Roadmap — Pono
 
-- **Statut** : `candidate` · **Version** : `1` · **Validée** : en attente de l'auteur
+- **Statut** : `in progress` · **Version** : `1` · **Validée** : en attente de l'auteur
 - **Axe** : dépendances et preuves, jamais des dates.
 - **Règle** : une phase se ferme sur sa preuve écrite dans `docs/VERITE_ET_PREUVES.md`.
 
@@ -11,17 +11,19 @@ conversation sur un serveur prêt, et la production obéit à la règle qu'il a 
 
 ## Matrice des surfaces
 
-| Surface | Décision de la personne | Données | Action réelle | Preuve |
-|---|---|---|---|---|
-| Console · projets | lequel reprendre | projet, environnement, déploiement | ouvrir un lien qui marche | les projets réels de l'auteur, état juste |
-| Console · consommation | quoi couper, quoi surveiller | abonnement, relevé | alerte avant épuisement | total du mois comparé aux factures |
-| MCP | agir sans quitter la conversation | les mêmes | les mêmes outils | Claude Code reconnaît « on continue X » |
-| Console · serveurs | lancer, mettre en veille | serveur de projet | serveur alloué, limite tenue | premier lien mesuré |
-| Console · mise en ligne | valider, ou laisser faire | proposition, verdict, mode | production déployée | un refus, une validation, un automatique |
+| Surface                 | Décision de la personne           | Données                            | Action réelle                | Preuve                                    |
+| ----------------------- | --------------------------------- | ---------------------------------- | ---------------------------- | ----------------------------------------- |
+| Console · projets       | lequel reprendre                  | projet, environnement, déploiement | ouvrir un lien qui marche    | les projets réels de l'auteur, état juste |
+| Console · consommation  | quoi couper, quoi surveiller      | abonnement, relevé                 | alerte avant épuisement      | total du mois comparé aux factures        |
+| MCP                     | agir sans quitter la conversation | les mêmes                          | les mêmes outils             | Claude Code reconnaît « on continue X »   |
+| Console · serveurs      | lancer, mettre en veille          | serveur de projet                  | serveur alloué, limite tenue | premier lien mesuré                       |
+| Console · mise en ligne | valider, ou laisser faire         | proposition, verdict, mode         | production déployée          | un refus, une validation, un automatique  |
 
 ---
 
 ## Phase 0 — Le socle · `001-foundation`
+
+> **Livrée le 2026-11-12.** Preuve : isolation de deux organisations (tests), console FR/EN.
 
 **Objectif.** Un dépôt où l'on peut livrer vite et sans peur.
 
@@ -37,6 +39,9 @@ conversation sur un serveur prêt, et la production obéit à la règle qu'il a 
 
 ## Phase 1 — L'atelier · `002-workshop`
 
+> **Livrée le 2026-11-12, en local.** Preuve : projets réels importés sans saisie. Restent la
+> connexion GitHub en ligne (application à créer par l'auteur) et l'adaptateur Coolify.
+
 **Objectif.** Voir l'état réel de ses projets au même endroit.
 
 - Connexion par GitHub ; organisation personnelle créée à la première connexion.
@@ -50,6 +55,9 @@ conversation sur un serveur prêt, et la production obéit à la règle qu'il a 
 
 ## Phase 2 — La consommation · `003-usage`
 
+> **Livrée le 2026-11-12, en local.** Preuve : 60 relevés réels (Netlify, Neon, Cloudflare),
+> GitHub et OpenAI « indisponibles » faute de droit. Restent les alertes hors console.
+
 **Objectif.** Un total juste de ses abonnements, et l'alerte avant que ça lâche.
 
 - Relevés mesurés : Neon, Netlify, Cloudflare, GitHub, Agent37, OpenAI.
@@ -61,6 +69,9 @@ conversation sur un serveur prêt, et la production obéit à la règle qu'il a 
 
 ## Phase 3 — Pono par MCP · `004-mcp`
 
+> **Livrée le 2026-11-12, en local.** Preuve : un client MCP réel passe par la console, reconnaît
+> « lectio » et le dépôt d'un dossier. Reste l'autorisation OAuth pour le connecteur Claude.ai.
+
 **Objectif.** Parler à Pono depuis sa conversation.
 
 - Serveur MCP distant, autorisation OAuth avec consentement dans la console.
@@ -70,6 +81,9 @@ conversation sur un serveur prêt, et la production obéit à la règle qu'il a 
 **Preuve.** Depuis Claude Code, « on continue lectio » reprend le bon projet.
 
 ## Phase 4 — Les serveurs de projet · `005-project-servers`
+
+> **Livrée le 2026-11-12, en local.** Preuve : cycle complet sur Agent37 ; limite du plan tenue.
+> Restent les variables de dev scellées et le contrôle des secrets avant commit.
 
 **Objectif.** Une phrase, et le projet a son serveur.
 
@@ -83,6 +97,9 @@ quel.
 
 ## Phase 5 — La mise en ligne sous garde-fou · `006-guarded-release`
 
+> **Codée et testée le 2026-11-12.** Reste la preuve sur un projet réel, avec l'auteur (elle
+> écrit chez GitHub).
+
 - Garde-fous : secrets, migrations, preview ; contrôle des secrets avant chaque commit du serveur.
 - Les trois modes (D-006), retour arrière.
 
@@ -90,9 +107,14 @@ quel.
 
 ## Phase 6 — Templates et skills · `007-templates`
 
+> **Codée et testée le 2026-11-12.** Restent les dépôts de départ par template et la preuve en
+> production.
+
 **Preuve.** Un template a mené un vrai projet en production.
 
 ## Phase 7 — Plans, facturation, administration · `008-billing-admin`
+
+> **Codée et testée le 2026-11-12.** Reste le compte Stripe de l'auteur.
 
 **Preuve.** Un premier paiement reçu ; l'administration voit coût et revenu par organisation.
 
