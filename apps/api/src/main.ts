@@ -2,7 +2,12 @@ import { serve } from '@hono/node-server';
 import { createApp } from './app.js';
 import { loadCatalog } from './features/catalog/index.js';
 import { devIdentity, githubIdentity, type IdentityProvider } from './features/identity/index.js';
-import { agent37Host } from './infrastructure/providers/agent37.js';
+import { agent37Account, agent37Host } from './infrastructure/providers/agent37.js';
+import {
+  devBilling,
+  stripeBilling,
+  unavailableBilling,
+} from './infrastructure/providers/stripe.js';
 import { unavailableServerHost } from './infrastructure/providers/no-server-host.js';
 import { cloudflareHosting } from './infrastructure/providers/cloudflare.js';
 import { githubCodeHost } from './infrastructure/providers/github.js';
@@ -66,6 +71,31 @@ const app = createApp({
   serverBudgetMicros: Math.round(config.PONO_SERVER_BUDGET_USD * 1_000_000),
   serverIdleSeconds: config.PONO_SERVER_IDLE_MINUTES * 60,
   catalog: loadCatalog(),
+  billing:
+    config.STRIPE_SECRET_KEY &&
+    config.STRIPE_WEBHOOK_SECRET &&
+    config.PONO_STRIPE_PRICE_SOLO &&
+    config.PONO_STRIPE_PRICE_PRO
+      ? stripeBilling({
+          secretKey: config.STRIPE_SECRET_KEY,
+          webhookSecret: config.STRIPE_WEBHOOK_SECRET,
+          prices: { solo: config.PONO_STRIPE_PRICE_SOLO, pro: config.PONO_STRIPE_PRICE_PRO },
+          fetch,
+        })
+      : config.PONO_DEV_SIGN_IN === '1'
+        ? devBilling({
+            secret: config.PONO_SECRETS_KEY,
+            publicUrl: config.PONO_PUBLIC_URL,
+            apiUrl: config.PONO_API_URL,
+            fetch,
+          })
+        : unavailableBilling(),
+  admins: config.PONO_ADMIN_LOGINS.split(',')
+    .map((l) => l.trim())
+    .filter(Boolean),
+  ...(config.AGENT37_API_KEY
+    ? { serverAccount: agent37Account({ apiKey: config.AGENT37_API_KEY, fetch }) }
+    : {}),
   now: () => new Date(),
 });
 

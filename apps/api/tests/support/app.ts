@@ -20,6 +20,7 @@ import type { Reading, UsageSource } from '../../src/features/usage/index.js';
 import { createPool, type Pool } from '../../src/platform/db.js';
 import { ProviderError } from '../../src/platform/http.js';
 import { Sealer } from '../../src/platform/secrets.js';
+import { devBilling } from '../../src/infrastructure/providers/stripe.js';
 
 export const PUBLIC_URL = 'http://console.test';
 
@@ -208,7 +209,7 @@ export function testApp(): TestApp {
   const pool = createPool(inject('appUrl'));
   const w = world();
   const now = { value: new Date('2026-11-12T12:00:00Z') };
-  const app = createApp({
+  const app: ReturnType<typeof createApp> = createApp({
     pool,
     sealer: new Sealer(randomBytes(32).toString('base64')),
     publicUrl: PUBLIC_URL,
@@ -225,6 +226,16 @@ export function testApp(): TestApp {
     serverBudgetMicros: 5_000_000,
     serverIdleSeconds: 1800,
     catalog: loadCatalog(),
+    billing: devBilling({
+      secret: 'billing-test',
+      publicUrl: PUBLIC_URL,
+      apiUrl: 'http://api.test',
+      fetch: (url, init) =>
+        Promise.resolve(
+          app.request(String(url).replace('http://api.test', ''), init as RequestInit),
+        ),
+    }),
+    admins: ['operator'],
     now: () => now.value,
   });
   return { app, pool, world: w, now };

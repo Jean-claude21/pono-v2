@@ -116,3 +116,21 @@ export function agent37Host(options: {
     },
   };
 }
+
+/** The workspace wallet: balance and how many instances may be awake at once (GET /v1/billing). */
+export function agent37Account(options: { apiKey: string; fetch: Fetch }) {
+  return async (): Promise<{ balanceMicros: number; activeLimit: number }> => {
+    const billing = await fetchJson<{ balance_usd: number; instance_limit: number }>(
+      options.fetch,
+      {
+        provider: ID,
+        url: `${API}/billing`,
+        headers: { authorization: `Bearer ${options.apiKey}` },
+      },
+    );
+    return {
+      balanceMicros: Math.round(billing.balance_usd * 1_000_000),
+      activeLimit: billing.instance_limit,
+    };
+  };
+}

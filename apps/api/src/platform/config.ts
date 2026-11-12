@@ -20,6 +20,14 @@ const schema = z.object({
   /** A server's spending cap for a month, in USD. */
   PONO_SERVER_BUDGET_USD: z.coerce.number().min(0).default(5),
   /** Idle minutes before a server sleeps. */
+  STRIPE_SECRET_KEY: z.string().min(1).optional(),
+  STRIPE_WEBHOOK_SECRET: z.string().min(1).optional(),
+  PONO_STRIPE_PRICE_SOLO: z.string().min(1).optional(),
+  PONO_STRIPE_PRICE_PRO: z.string().min(1).optional(),
+  /** Logins of the platform's operators, comma-separated. */
+  PONO_ADMIN_LOGINS: z.string().default(''),
+  /** The API's own address, for development billing. */
+  PONO_API_URL: z.url().default('http://localhost:8787'),
   PONO_SERVER_IDLE_MINUTES: z.coerce.number().int().min(5).default(30),
 });
 

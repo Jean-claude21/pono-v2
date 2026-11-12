@@ -1,4 +1,6 @@
 import { Hono } from 'hono';
+import { adminRoutes } from './features/admin/index.js';
+import { billingWebhook, planRoutes, type BillingProvider } from './features/billing/index.js';
 import { agentRoutes, mcpHandler } from './features/agents/index.js';
 import { catalogRoutes, type Catalog } from './features/catalog/index.js';
 import { connectionRoutes, type Connectable } from './features/connections/index.js';
@@ -33,6 +35,9 @@ export interface AppDeps {
   serverBudgetMicros: number;
   serverIdleSeconds: number;
   catalog: Catalog;
+  billing: BillingProvider;
+  admins: string[];
+  serverAccount?: () => Promise<{ balanceMicros: number; activeLimit: number } | null>;
   now: () => Date;
 }
 
@@ -56,8 +61,11 @@ export function createApp(deps: AppDeps): Hono<AppEnv> {
   v1.route('/catalog', catalogRoutes(deps.catalog));
   v1.route('/launch', launchRoutes(deps));
   v1.route('/agents', agentRoutes(deps));
+  v1.route('/plan', planRoutes(deps));
+  v1.route('/admin', adminRoutes(deps));
   app.route('/v1', v1);
   app.all('/mcp', mcpHandler(deps));
+  app.route('/billing', billingWebhook(deps));
 
   app.notFound((c) => c.json(errorBody('route.not_found', 'No such route.'), 404));
   app.onError((error, c) => {

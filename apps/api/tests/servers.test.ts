@@ -21,9 +21,7 @@ async function workshop(
     body: { provider: 'code', fields: { token: 'good' } },
   });
   const org = (await (await call(t, cookie, '/v1/me')).json()).organization.id as string;
-  await withOrganization(t.pool, org, (client) =>
-    client.query('UPDATE organizations SET plan = $1', [plan]),
-  );
+  await t.pool.query('SELECT set_organization_plan($1, $2, null)', [org, plan]);
   const projects: string[] = [];
   for (let i = 0; i < count; i++) {
     const name = `p${randomUUID().slice(0, 6)}`;
