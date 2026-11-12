@@ -20,7 +20,7 @@ export function devIdentity(): IdentityProvider {
         externalId: `dev:${login}`,
         login,
         name: login,
-        email: null,
+        email: `${login}@dev.pono.test`,
         codeHostToken: null,
       };
     },

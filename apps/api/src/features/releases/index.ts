@@ -474,6 +474,63 @@ export async function requestRollback(
   });
 }
 
+/** How long after an automatic merge Pono watches production and rolls back by itself. */
+export const AUTO_ROLLBACK_WINDOW_MS = 60 * 60 * 1000;
+
+/**
+ * D-006, mode 2: after Pono merged a change by itself, if production stops answering, Pono puts the
+ * previous deployment back, once, and says so. Never after a person's own merge, never in `ask`.
+ * Run by Pono's periodic task, after the projects are read again.
+ */
+export async function autoRollback(deps: ProjectsDeps, actor: Actor): Promise<string[]> {
+  if (actor.channel !== 'system') throw new AppError('release.person_only', 403, 'Pono only.');
+  const candidates = await withOrganization(deps.pool, actor.organizationId, async (client) => {
+    const { rows } = await client.query<ProjectRow & { release_id: string; number: number }>(
+      `SELECT p.id, p.repository, p.default_branch, p.hosting_provider, p.hosting_ref, p.release_mode,
+         p.release_mode_until, r.id AS release_id, r.number
+       FROM projects p JOIN releases r ON r.project_id = p.id
+       WHERE p.link_status = 'down' AND r.status = 'merged' AND r.decided_by IS NULL
+         AND r.decided_at >= now() - make_interval(secs => $1)
+         AND NOT EXISTS (SELECT 1 FROM journal j WHERE j.project_id = p.id
+           AND j.action = 'release.auto_rolled_back' AND j.created_at >= r.decided_at)
+       ORDER BY r.decided_at DESC`,
+      [AUTO_ROLLBACK_WINDOW_MS / 1000],
+    );
+    return rows;
+  });
+  const done: string[] = [];
+  for (const p of candidates) {
+    if (done.includes(p.id) || modeInForce(p, deps.now()) !== 'auto') continue;
+    const { hosting, hostingCred } = await tools(deps, actor, p).catch(() => ({
+      hosting: null,
+      hostingCred: null,
+    }));
+    if (!hosting || !hostingCred || !p.hosting_ref) continue;
+    await hosting.rollback(hostingCred, p.hosting_ref);
+    await withOrganization(deps.pool, actor.organizationId, async (client) => {
+      await record(client, {
+        organizationId: actor.organizationId,
+        projectId: p.id,
+        action: 'release.auto_rolled_back',
+        actorPerson: null,
+        channel: 'system',
+        detail: { number: p.number, reason: 'production_down' },
+      });
+      await client.query(
+        `INSERT INTO alerts (organization_id, key, kind, level, detail) VALUES ($1, $2, 'release', 'bad', $3)
+         ON CONFLICT (organization_id, key) WHERE resolved_at IS NULL DO UPDATE SET detail = excluded.detail`,
+        [
+          actor.organizationId,
+          `rolled-back:${p.id}`,
+          { projectId: p.id, number: p.number, reason: 'production_down' },
+        ],
+      );
+    });
+    done.push(p.id);
+  }
+  return done;
+}
+
 /** Release routes (phase 5). */
 export function releaseRoutes(deps: ProjectsDeps): Hono<AppEnv> {
   const modeBody = z.object({
