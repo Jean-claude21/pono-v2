@@ -17,9 +17,10 @@ prêt pour chaque projet lancé, et une production qui obéit à la règle chois
 
 ## Phase en cours
 
-Phases 0 à 7 codées et testées (`specs/001` à `008`), prouvées en local contre les vrais
-fournisseurs pour 0 à 4. Restent les preuves en ligne et les gestes de l'auteur listés dans
-`docs/ROADMAP.md` (application GitHub, compte Stripe, preuve d'une mise en ligne réelle).
+Phases 0 à 14 codées et testées (`specs/001` à `015`) ; prouvées en local contre les vrais
+fournisseurs, dont trois personnes et trois serveurs Agent37 réels. Restent les gestes de l'auteur
+listés dans `docs/ROADMAP.md` (application GitHub, domaine, Stripe, Umami, Resend, Coolify), puis le
+déploiement et les preuves en ligne.
 
 ## Lancer en local
 
@@ -29,6 +30,7 @@ cd apps/api && PONO_ADMIN_LOGINS=<login> pnpm exec tsx watch --env-file-if-exist
   --env-file-if-exists=../../../.secrets/.admin.env src/main.ts
 pnpm dev:web                                  # console sur :3000 (relaie /auth, /v1, /mcp)
 pnpm --filter @pono/api exec tsx scripts/e2e-live.ts   # parcours complet contre les vrais fournisseurs
+GITHUB_TOKEN=$(gh auth token) pnpm --filter @pono/api exec tsx scripts/multi-user-live.ts  # trois personnes, trois serveurs
 ```
 
 ## Carte du dépôt
