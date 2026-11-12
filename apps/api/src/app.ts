@@ -3,6 +3,9 @@ import { adminRoutes } from './features/admin/index.js';
 import { analyticsRoutes, type SiteAnalytics } from './features/analytics/index.js';
 import { billingWebhook, planRoutes, type BillingProvider } from './features/billing/index.js';
 import { agentRoutes, mcpHandler } from './features/agents/index.js';
+import { oauthMetadata, oauthRoutes } from './features/agents/oauth.js';
+import { variableRoutes } from './features/variables/index.js';
+import { rateLimit } from './platform/rate-limit.js';
 import { catalogRoutes, type Catalog } from './features/catalog/index.js';
 import { connectionRoutes, type Connectable } from './features/connections/index.js';
 import { healthRoutes } from './features/health/index.js';
@@ -42,6 +45,8 @@ export interface AppDeps {
   analytics?: SiteAnalytics[];
   admins: string[];
   serverAccount?: () => Promise<{ balanceMicros: number; activeLimit: number } | null>;
+  /** Requests per minute and per caller; tests raise them. */
+  rateLimits?: { auth: number; v1: number; mcp: number };
   now: () => Date;
 }
 
@@ -55,6 +60,13 @@ export function createApp(appDeps: AppDeps): Hono<AppEnv> {
     },
   };
   const app = new Hono<AppEnv>();
+  const limits = appDeps.rateLimits ?? { auth: 30, v1: 600, mcp: 240 };
+  app.use('/auth/*', rateLimit({ name: 'auth', windowMs: 60_000, max: limits.auth }));
+  app.use('/oauth/*', rateLimit({ name: 'oauth', windowMs: 60_000, max: limits.auth }));
+  app.use('/v1/*', rateLimit({ name: 'v1', windowMs: 60_000, max: limits.v1 }));
+  app.use('/mcp', rateLimit({ name: 'mcp', windowMs: 60_000, max: limits.mcp }));
+  app.route('/.well-known', oauthMetadata(deps));
+  app.route('/oauth', oauthRoutes(deps));
   app.route('/health', healthRoutes({ databaseUp: () => ping(deps.pool) }));
   app.route('/auth', authRoutes(deps));
 
@@ -65,6 +77,7 @@ export function createApp(appDeps: AppDeps): Hono<AppEnv> {
   v1.route('/', projectRoutes(deps));
   v1.route('/', manifestRoutes(deps));
   v1.route('/', analyticsRoutes(deps));
+  v1.route('/', variableRoutes(deps));
   v1.route(
     '/',
     usageRoutes({ ...deps, internalUsage: [...(deps.internalUsage ?? []), serversUsage()] }),

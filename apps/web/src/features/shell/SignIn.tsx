@@ -5,6 +5,10 @@ import * as m from '@/paraglide/messages.js';
 export function SignIn() {
   const providers = useApi<{ providers: string[] }>('/auth/providers');
   const list = providers.result?.ok ? providers.result.data.providers : [];
+  // Back to an agent's authorization once signed in (D-019).
+  const next =
+    typeof window === 'undefined' ? null : new URLSearchParams(window.location.search).get('next');
+  const after = next?.startsWith('/oauth/authorize?') ? `next=${encodeURIComponent(next)}` : '';
   return (
     <div className="auth">
       <div className="auth-box">
@@ -18,7 +22,7 @@ export function SignIn() {
         <p className="mute small mt-sm">{m.signin_why_github()}</p>
         <div className="stack mt-lg">
           {list.includes('github') && (
-            <a className="btn btn-primary" href="/auth/sign-in/github">
+            <a className="btn btn-primary" href={`/auth/sign-in/github${after ? `?${after}` : ''}`}>
               {m.signin_github()}
             </a>
           )}
@@ -28,7 +32,10 @@ export function SignIn() {
             </a>
           )}
           {list.includes('dev') && (
-            <a className="btn btn-ghost" href="/auth/sign-in/dev?login=dev">
+            <a
+              className="btn btn-ghost"
+              href={`/auth/sign-in/dev?login=dev${after ? `&${after}` : ''}`}
+            >
               {m.signin_dev()}
             </a>
           )}
