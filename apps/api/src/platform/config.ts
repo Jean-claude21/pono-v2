@@ -32,6 +32,7 @@ const schema = z.object({
   // Periodic tasks (D-018): on when the owner URL is set, unless turned off.
   PONO_JOBS: z.enum(['0', '1']).default('1'),
   RESEND_API_KEY: z.string().min(1).optional(),
+  PONO_WEBHOOK_SECRET: z.string().min(16).optional(),
   PONO_ALERTS_FROM: z.string().min(3).optional(),
 });
 

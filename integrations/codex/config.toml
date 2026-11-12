@@ -1,0 +1,5 @@
+# Pono for Codex: add to ~/.codex/config.toml. PONO_TOKEN is an agent token from Pono's console
+# (Agents → give access); Codex sends it as a bearer and never writes it here.
+[mcp_servers.pono]
+url = "https://YOUR-PONO-ADDRESS/mcp"
+bearer_token_env_var = "PONO_TOKEN"

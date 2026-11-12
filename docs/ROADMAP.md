@@ -160,6 +160,13 @@ quel.
 > **Prouvée le 2026-11-12** : trois personnes, trois serveurs Agent37 réels, limite et isolation
 > tenues, tout rendu.
 
+## Phase 15 — La boucle de dev · `017-dev-loop`
+
+> **Prouvée le 2026-11-12** sur Agent37 et GitHub. Restent l'application GitHub (jetons d'une
+> heure) et le domaine (webhook enregistré, preview sous le domaine de Pono).
+
+**Preuve.** Une modification sur le serveur recharge la preview ; une poussée faite ailleurs la suit.
+
 ---
 
 ## Backlog

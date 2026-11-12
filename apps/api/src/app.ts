@@ -5,6 +5,8 @@ import { billingWebhook, planRoutes, type BillingProvider } from './features/bil
 import { agentRoutes, mcpHandler } from './features/agents/index.js';
 import { oauthMetadata, oauthRoutes } from './features/agents/oauth.js';
 import { variableRoutes } from './features/variables/index.js';
+import { devRoutes } from './features/devloop/index.js';
+import { codeHook } from './features/devloop/webhook.js';
 import { rateLimit } from './platform/rate-limit.js';
 import { catalogRoutes, type Catalog } from './features/catalog/index.js';
 import { connectionRoutes, type Connectable } from './features/connections/index.js';
@@ -45,6 +47,8 @@ export interface AppDeps {
   analytics?: SiteAnalytics[];
   admins: string[];
   serverAccount?: () => Promise<{ balanceMicros: number; activeLimit: number } | null>;
+  /** Signs the code host's push events (D-020). */
+  webhookSecret?: string;
   /** Requests per minute and per caller; tests raise them. */
   rateLimits?: { auth: number; v1: number; mcp: number };
   now: () => Date;
@@ -78,6 +82,7 @@ export function createApp(appDeps: AppDeps): Hono<AppEnv> {
   v1.route('/', manifestRoutes(deps));
   v1.route('/', analyticsRoutes(deps));
   v1.route('/', variableRoutes(deps));
+  v1.route('/', devRoutes(deps));
   v1.route(
     '/',
     usageRoutes({ ...deps, internalUsage: [...(deps.internalUsage ?? []), serversUsage()] }),
@@ -92,6 +97,7 @@ export function createApp(appDeps: AppDeps): Hono<AppEnv> {
   app.route('/v1', v1);
   app.all('/mcp', mcpHandler(deps));
   app.route('/billing', billingWebhook(deps));
+  app.route('/hooks', codeHook(deps));
 
   app.notFound((c) => c.json(errorBody('route.not_found', 'No such route.'), 404));
   app.onError((error, c) => {

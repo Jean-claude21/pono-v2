@@ -1,5 +1,6 @@
 import { createFileRoute } from '@tanstack/react-router';
 import { useState } from 'react';
+import { ProjectDev } from '@/features/projects/ProjectDev';
 import { ProjectManifest } from '@/features/projects/ProjectManifest';
 import { ProjectServer } from '@/features/projects/ProjectServer';
 import { ProjectVariables } from '@/features/projects/ProjectVariables';
@@ -109,6 +110,7 @@ function Project({ id }: Readonly<{ id: string }>) {
       </dl>
 
       <ProjectServer projectId={id} />
+      <ProjectDev projectId={id} />
       <ProjectVariables projectId={id} />
       <ProjectManifest projectId={id} />
       <ProjectVisits projectId={id} />

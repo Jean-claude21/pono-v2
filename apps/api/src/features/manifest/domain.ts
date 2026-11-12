@@ -66,6 +66,14 @@ export const manifestSchema = z.strictObject({
     })
     .optional(),
   mcp: z.array(z.string().min(1).max(50)).max(30).optional(),
+  /** How the project runs on its development server (D-020). */
+  dev: z
+    .strictObject({
+      install: z.string().min(1).max(500).optional(),
+      command: z.string().min(1).max(500),
+      port: z.number().int().min(1024).max(65535),
+    })
+    .optional(),
 });
 
 export type Manifest = z.infer<typeof manifestSchema>;
