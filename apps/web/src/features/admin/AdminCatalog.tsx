@@ -37,7 +37,12 @@ export function AdminCatalog() {
     <>
       <h3 className="section-title mono-label">{m.admin_catalog()}</h3>
       <form className="row mt-md" onSubmit={importIt}>
-        <input name="repository" placeholder={m.admin_catalog_placeholder()} required pattern="[\w.-]+/[\w.-]+" />
+        <input
+          name="repository"
+          placeholder={m.admin_catalog_placeholder()}
+          required
+          pattern="[\w.-]+/[\w.-]+"
+        />
         <button type="submit" className="btn btn-primary btn-sm">
           {m.admin_catalog_import()}
         </button>
