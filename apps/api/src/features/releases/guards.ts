@@ -3,6 +3,8 @@
  * keep a secret's value. A guard answers passed or failed, with findings that name file and line.
  */
 
+import { declaredFiles, readManifest } from '../manifest/domain.js';
+
 export interface ChangedFile {
   path: string;
   status: 'added' | 'modified' | 'removed' | 'renamed';
@@ -157,24 +159,14 @@ export function previewGuard(
   return { guard: 'preview', passed: true, findings: [] };
 }
 
-/** The destructions declared in `pono.yaml`: file paths under `declared_destructions`. */
+/**
+ * The destructions declared in `pono.yaml` (`release.declared_destructions`). A file that does not
+ * read as a manifest declares nothing: the guard then refuses every destruction.
+ */
 export function declaredDestructions(manifest: string | null): string[] {
   if (!manifest) return [];
-  const out: string[] = [];
-  let inside = false;
-  for (const line of manifest.split('\n')) {
-    if (/^declared_destructions:\s*$/.test(line)) {
-      inside = true;
-      continue;
-    }
-    if (/^declared_destructions:\s*\[\s*\]/.test(line)) return [];
-    if (inside) {
-      const item = line.match(/^\s+-\s+(?:file:\s*)?["']?([^"'#]+?)["']?\s*(?:#.*)?$/);
-      if (item) out.push(item[1]!.trim());
-      else if (/^\S/.test(line)) inside = false;
-    }
-  }
-  return out;
+  const reading = readManifest(manifest);
+  return reading.ok ? declaredFiles(reading.manifest) : [];
 }
 
 export type ReleaseMode = 'ask' | 'auto' | 'bypass';

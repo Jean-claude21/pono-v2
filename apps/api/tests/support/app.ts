@@ -86,6 +86,8 @@ export interface World {
   proposalFiles: Map<string, ChangedFile[]>;
   statuses: { fullName: string; sha: string; state: string }[];
   merged: string[];
+  /** Pull requests Pono opened with files: `fullName` → the last one. */
+  opened: Map<string, { branch: string; title: string; files: Record<string, string> }>;
   rollbacks: string[];
   files: Map<string, Record<string, string>>;
   servers: Map<string, HostedServer & { env: Record<string, string> }>;
@@ -106,6 +108,7 @@ export function world(): World {
     proposalFiles: new Map(),
     statuses: [],
     merged: [],
+    opened: new Map(),
     rollbacks: [],
     files: new Map(),
     servers: new Map(),
@@ -149,6 +152,11 @@ export function fakeAdapters(w: World): AppDeps['adapters'] {
     },
     async fileAt(_c, fullName, path) {
       return w.files.get(fullName)?.[path] ?? null;
+    },
+    async proposeFiles(credential, fullName, input) {
+      w.seen.push(credential);
+      w.opened.set(fullName, { branch: input.branch, title: input.title, files: input.files });
+      return { number: 99, url: `https://code.test/${fullName}/pull/99` };
     },
     async setReleaseStatus(_c, fullName, sha, state) {
       w.statuses.push({ fullName, sha, state });

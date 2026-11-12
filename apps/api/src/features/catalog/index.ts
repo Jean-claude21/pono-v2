@@ -12,8 +12,11 @@ export interface Template {
   skills: string[];
 }
 
+export type SkillFamily = 'safety' | 'opinion' | 'design';
+
 export interface Skill {
   name: string;
+  family: SkillFamily;
   description: string;
   body: string;
 }
@@ -25,7 +28,7 @@ export interface Catalog {
 
 const CATALOG_DIR = new URL('../../../catalog/', import.meta.url);
 
-/** `## name`, then `_description_`, then the body, until the next `## `. */
+/** `## name · family`, then `_description_`, then the body, until the next `## `. */
 export function parseSkills(markdown: string): Skill[] {
   return markdown
     .split(/^## /m)
@@ -38,7 +41,10 @@ export function parseSkills(markdown: string): Skill[] {
         .slice(descriptionIndex + 1)
         .join('\n')
         .trim();
-      return { name: nameLine!.trim(), description, body };
+      const [name, family] = nameLine!.split('·').map((x) => x.trim());
+      if (family !== 'safety' && family !== 'opinion' && family !== 'design')
+        throw new Error(`Skill ${name} has no family (safety, opinion or design).`);
+      return { name: name!, family, description, body };
     });
 }
 
@@ -60,7 +66,13 @@ export function catalogRoutes(catalog: Catalog): Hono<AppEnv> {
   return new Hono<AppEnv>()
     .get('/templates', (c) => c.json({ templates: catalog.templates }))
     .get('/skills', (c) =>
-      c.json({ skills: catalog.skills.map(({ name, description }) => ({ name, description })) }),
+      c.json({
+        skills: catalog.skills.map(({ name, family, description }) => ({
+          name,
+          family,
+          description,
+        })),
+      }),
     )
     .get('/skills/:name', (c) => {
       const skill = catalog.skills.find((s) => s.name === c.req.param('name'));

@@ -8,7 +8,8 @@ import { AppError, errorBody } from '../../platform/errors.js';
 import { hashToken } from '../../platform/secrets.js';
 import type { Catalog } from '../catalog/index.js';
 import { launchProject, type LaunchDeps } from '../launch/index.js';
-import { refreshProject } from '../projects/application.js';
+import { manifestView, proposeSkills } from '../manifest/index.js';
+import { importProject, refreshProject } from '../projects/application.js';
 import { evaluateReleases, listReleases, requestRollback } from '../releases/index.js';
 import { serversView, sleepServer, syncServers, wakeServer } from '../servers/index.js';
 import { readUsage, usageView, type UsageDeps } from '../usage/index.js';
@@ -22,7 +23,8 @@ const INSTRUCTIONS = `Pono is the person's workshop: their projects, what their 
 project, and releases that obey the rule they chose. When the person says « launch a project with
 Pono » call launch_project (suggest a template from list_templates first). When they say « let's
 continue X », or « continue this project » inside a folder, call find_project with the name, or with
-the folder's git remote as repository, then resume_project. If find_project answers ambiguous, ask
+the folder's git remote as repository, then resume_project. A repository Pono does not know yet, in any
+technology, joins with adopt_project. If find_project answers ambiguous, ask
 the person which one; never guess. Never ask for a key in the conversation: keys are set in the
 console. You never validate a release nor roll back: you propose, a person decides.`;
 
@@ -128,13 +130,65 @@ function buildServer(deps: McpDeps, actor: Actor, scope: 'read' | 'act'): McpSer
       annotations: read,
     },
     async ({ projectId }) =>
-      guard(async () => ({
-        project: await projectStatus(deps, actor, projectId),
-        skills: deps.catalog.skills
-          .filter((s) => ['pono-basics', 'safe-migrations', 'no-secrets'].includes(s.name))
-          .map((s) => ({ name: s.name, description: s.description })),
-        next: 'Read pono-basics with get_skill before changing code. If the server sleeps, call wake_server.',
-      })),
+      guard(async () => {
+        const project = await projectStatus(deps, actor, projectId);
+        const manifest = await manifestView(deps, actor, projectId);
+        const active = manifest.skills.filter((s) => s.active);
+        return {
+          project,
+          manifest: {
+            status: manifest.status,
+            problems: manifest.problems,
+            proposalUrl: manifest.proposalUrl,
+            local: manifest.manifest?.skills?.local ?? null,
+          },
+          skills: active.map((s) => ({
+            name: s.name,
+            family: s.family,
+            description: deps.catalog.skills.find((c) => c.name === s.name)?.description ?? '',
+          })),
+          next: [
+            'Read each active skill with get_skill before changing code; the repository’s own conventions (CLAUDE.md, AGENTS.md, the local skills folder) come first.',
+            manifest.status === 'proposed'
+              ? 'pono.yaml is proposed in a pull request: tell the person to complete and merge it.'
+              : manifest.status === 'invalid'
+                ? 'pono.yaml does not read: fix the problems listed, in a proposal.'
+                : null,
+            'If the server sleeps, call wake_server.',
+          ].filter(Boolean),
+        };
+      }),
+  );
+
+  server.registerTool(
+    'adopt_project',
+    {
+      description:
+        'Puts an existing repository under Pono, whatever its technology: the project joins the workshop and Pono proposes its pono.yaml in a pull request, pre-filled. Use with the git remote of the current folder.',
+      inputSchema: { repository: z.string().regex(/^[\w.-]+\/[\w.-]+$/) },
+      annotations: act,
+    },
+    async ({ repository }) =>
+      acting(async () => {
+        const projectId = await importProject(deps, actor, repository);
+        return { projectId, manifest: await manifestView(deps, actor, projectId) };
+      }),
+  );
+
+  server.registerTool(
+    'set_skills',
+    {
+      description:
+        'Turns skills on or off for a project. Pono proposes the change of pono.yaml in a pull request; the person merges it.',
+      inputSchema: {
+        projectId: z.string(),
+        use: z.array(z.string()).default([]),
+        off: z.array(z.string()).default([]),
+      },
+      annotations: act,
+    },
+    async ({ projectId, use, off }) =>
+      acting(() => proposeSkills(deps, actor, projectId, { use, off })),
   );
 
   server.registerTool(

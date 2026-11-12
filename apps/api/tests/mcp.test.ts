@@ -182,6 +182,34 @@ describe('Pono over MCP (phase 3)', () => {
     await client.close();
   });
 
+  it('adopts a repository in any technology from its folder, and proposes skills in the file', async () => {
+    const { token } = await workshop('act');
+    const client = await agent(token);
+    const name = `go-${randomUUID().slice(0, 6)}`;
+    t.world.repositories.push({
+      fullName: `jc/${name}`,
+      name,
+      defaultBranch: 'main',
+      url: '',
+      private: true,
+      pushedAt: null,
+    });
+    t.world.files.set(`jc/${name}`, { 'go.mod': 'module x\n' });
+    const adopted = (await tool(client, 'adopt_project', { repository: `jc/${name}` })).body;
+    expect(adopted.manifest.status).toBe('proposed');
+    const resumed = (await tool(client, 'resume_project', { projectId: adopted.projectId })).body;
+    const names = resumed.skills.map((s: { name: string }) => s.name);
+    expect(names).toContain('safe-migrations');
+    expect(names).not.toContain('pono-stack');
+    expect(resumed.next.join(' ')).toContain('merge');
+    const set = await tool(client, 'set_skills', {
+      projectId: adopted.projectId,
+      use: ['impeccable'],
+    });
+    expect(set.body.url).toContain('/pull/');
+    await client.close();
+  });
+
   it('cannot reach another workshop, and stops working once cut', async () => {
     const a = await workshop('act');
     const b = await workshop('read');

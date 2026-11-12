@@ -143,7 +143,8 @@ describe('guarded releases (phase 5)', () => {
 
   it('lets a declared destruction through when it comes alone', async () => {
     const s = await setup([destructive], {
-      manifest: 'declared_destructions:\n  - db/migrations/0003.sql\n',
+      manifest:
+        'version: 1\nname: shop\nrelease:\n  declared_destructions:\n    - db/migrations/0003.sql\n',
     });
     const { releases } = await (
       await call(t, s.cookie, `/v1/projects/${s.id}/releases/evaluate`, { method: 'POST' })
