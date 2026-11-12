@@ -15,6 +15,7 @@ import {
   type Catalog,
 } from '../catalog/index.js';
 import { launchProject, type LaunchDeps } from '../launch/index.js';
+import { siteMetrics } from '../analytics/index.js';
 import { activeCredentials } from '../connections/index.js';
 import { LEVEL_GUIDANCE, LEVELS, levelOf, setLevel } from '../identity/index.js';
 import { manifestView, proposeSkills } from '../manifest/index.js';
@@ -327,6 +328,20 @@ function buildServer(deps: McpDeps, actor: Actor, scope: 'read' | 'act'): McpSer
   );
 
   const catalog = () => catalogFor(deps.pool, deps.catalog, actor.organizationId);
+
+  server.registerTool(
+    'read_site_metrics',
+    {
+      description:
+        "A project's visits over the last days (pageviews, visitors, top pages and sources), measured at its analytics provider, or why they are unavailable.",
+      inputSchema: { projectId: z.string(), days: z.number().int().min(1).max(90).default(30) },
+      annotations: read,
+    },
+    async ({ projectId, days }) =>
+      guard(() =>
+        siteMetrics({ ...deps, analytics: deps.analytics ?? [] }, actor, projectId, days),
+      ),
+  );
 
   server.registerTool(
     'list_templates',

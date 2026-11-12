@@ -3,6 +3,11 @@ import { getLocale } from '@/paraglide/runtime.js';
 
 /** Stable codes from the API, translated here (D-009). An unknown code shows as it is. */
 const tables: Record<string, Record<string, () => string>> = {
+  visitsGap: {
+    not_linked: m.visits_gap_not_linked,
+    not_connected: m.visits_gap_not_connected,
+    provider_refused: m.visits_gap_provider_refused,
+  },
   kind_entry: {
     template: m.kind_entry_template,
     skill: m.kind_entry_skill,
@@ -100,6 +105,7 @@ const tables: Record<string, Record<string, () => string>> = {
   },
   env: { production: m.env_production, preview: m.env_preview },
   action: {
+    'analytics.linked': m.action_analytics_linked,
     'catalog.skill_saved': m.action_catalog_skill_saved,
     'catalog.template_saved': m.action_catalog_template_saved,
     'catalog.sharing_proposed': m.action_catalog_sharing_proposed,
@@ -140,12 +146,21 @@ const tables: Record<string, Record<string, () => string>> = {
   },
   channel: { console: m.channel_console, mcp: m.channel_mcp, system: m.channel_system },
   kind: {
+    analytics: m.connections_kind_analytics,
     code_host: m.connections_kind_code_host,
     hosting: m.connections_kind_hosting,
     database: m.connections_kind_database,
     ai: m.connections_kind_ai,
   },
-  field: { token: m.field_token, accountId: m.field_accountId },
+  field: {
+    token: m.field_token,
+    accountId: m.field_accountId,
+    apiKey: m.field_apiKey,
+    url: m.field_url,
+    username: m.field_username,
+    password: m.field_password,
+    host: m.field_host,
+  },
   source: {
     measured: m.source_measured,
     estimated: m.source_estimated,
@@ -165,6 +180,8 @@ const tables: Record<string, Record<string, () => string>> = {
     account: m.meter_account,
   },
   error: {
+    'analytics.not_connected': m.error_analytics_not_connected,
+    'analytics.site_not_found': m.error_analytics_site_not_found,
     'catalog.safety_reserved': m.error_catalog_safety_reserved,
     'catalog.name_taken': m.error_catalog_name_taken,
     'catalog.unreadable': m.error_catalog_unreadable,

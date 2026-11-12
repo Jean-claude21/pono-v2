@@ -264,6 +264,45 @@ export async function syncManifest(
 }
 
 /** Turns skills on or off: Pono proposes the change of `pono.yaml`, the file stays the truth. */
+/**
+ * Proposes a change of `pono.yaml` in a pull request; the file stays the truth. Before the file is
+ * merged, the change goes into the adoption proposal itself.
+ */
+export async function proposeManifestChange(
+  deps: ManifestDeps,
+  actor: Actor,
+  projectId: string,
+  change: (manifest: Manifest) => Manifest,
+  pr: { branch: string; title: string; body?: string },
+): Promise<{ url: string; number: number; manifest: Manifest }> {
+  const catalog = await catalogFor(deps.pool, deps.catalog, actor.organizationId);
+  const row = await withOrganization(deps.pool, actor.organizationId, (c) => project(c, projectId));
+  const { host, credential } = await codeHost(deps, actor.organizationId);
+  const base =
+    row.manifest ??
+    (await draftManifest(catalog, row, (path) =>
+      host.fileAt(credential, row.repository, path, row.default_branch),
+    ));
+  const manifest = change(base);
+  const present = row.manifest_status === 'present';
+  const proposal = await host.proposeFiles(credential, row.repository, {
+    base: row.default_branch,
+    branch: present ? pr.branch : ADOPTION_BRANCH,
+    title: present ? pr.title : 'Add pono.yaml',
+    body: pr.body ?? 'A change of this project’s manifest, proposed by Pono. Merge to apply.',
+    files: { [MANIFEST_PATH]: writeManifest(manifest) },
+  });
+  if (!present)
+    await withOrganization(deps.pool, actor.organizationId, (c) =>
+      c.query(
+        "UPDATE projects SET manifest_status = 'proposed', manifest = $2, manifest_proposal_url = $3 WHERE id = $1",
+        [projectId, JSON.stringify(manifest), proposal.url],
+      ),
+    );
+  return { ...proposal, manifest };
+}
+
+/** Turns skills on or off: Pono proposes the change of `pono.yaml`, the file stays the truth. */
 export async function proposeSkills(
   deps: ManifestDeps,
   actor: Actor,
@@ -275,47 +314,40 @@ export async function proposeSkills(
   const unknown = [...change.use, ...change.off].filter((n) => !known.has(n));
   if (unknown.length)
     throw new AppError('skill.not_found', 404, 'No such skill.', { skills: unknown });
-  const row = await withOrganization(deps.pool, actor.organizationId, (c) => project(c, projectId));
-  const { host, credential } = await codeHost(deps, actor.organizationId);
-  const base =
-    row.manifest ??
-    (await draftManifest(catalog, row, (path) =>
-      host.fileAt(credential, row.repository, path, row.default_branch),
-    ));
-  const use = new Set([...(base.skills?.use ?? []), ...change.use]);
-  const off = new Set([...(base.skills?.off ?? []), ...change.off]);
-  for (const n of change.use) off.delete(n);
-  for (const n of change.off) use.delete(n);
-  const manifest: Manifest = {
-    ...base,
-    skills: {
-      ...base.skills,
-      ...(use.size ? { use: [...use].sort() } : { use: [] }),
-      ...(off.size ? { off: [...off].sort() } : {}),
+  const proposal = await proposeManifestChange(
+    deps,
+    actor,
+    projectId,
+    (base) => {
+      const use = new Set([...(base.skills?.use ?? []), ...change.use]);
+      const off = new Set([...(base.skills?.off ?? []), ...change.off]);
+      for (const n of change.use) off.delete(n);
+      for (const n of change.off) use.delete(n);
+      return {
+        ...base,
+        skills: {
+          ...base.skills,
+          use: [...use].sort(),
+          ...(off.size ? { off: [...off].sort() } : {}),
+        },
+      };
     },
-  };
-  const proposal = await host.proposeFiles(credential, row.repository, {
-    base: row.default_branch,
-    branch: row.manifest_status === 'present' ? 'pono/skills' : ADOPTION_BRANCH,
-    title: row.manifest_status === 'present' ? 'Update the skills in pono.yaml' : 'Add pono.yaml',
-    body: 'The skills chosen for this project, written in its manifest. Merge to apply.',
-    files: { [MANIFEST_PATH]: writeManifest(manifest) },
-  });
-  await withOrganization(deps.pool, actor.organizationId, async (c) => {
-    if (row.manifest_status !== 'present')
-      await c.query(
-        "UPDATE projects SET manifest_status = 'proposed', manifest = $2, manifest_proposal_url = $3 WHERE id = $1",
-        [projectId, JSON.stringify(manifest), proposal.url],
-      );
-    await record(c, {
+    {
+      branch: 'pono/skills',
+      title: 'Update the skills in pono.yaml',
+      body: 'The skills chosen for this project, written in its manifest. Merge to apply.',
+    },
+  );
+  await withOrganization(deps.pool, actor.organizationId, (c) =>
+    record(c, {
       organizationId: actor.organizationId,
       projectId,
       action: 'skills.proposed',
       actorPerson: actor.personId,
       channel: actor.channel,
       detail: { use: change.use, off: change.off, number: proposal.number },
-    });
-  });
+    }),
+  );
   return { url: proposal.url };
 }
 

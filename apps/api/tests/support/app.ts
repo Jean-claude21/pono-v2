@@ -15,6 +15,7 @@ import type {
 } from '../../src/features/projects/index.js';
 import type { ChangedFile } from '../../src/features/releases/guards.js';
 import type { Proposal } from '../../src/features/projects/ports.js';
+import type { SiteAnalytics } from '../../src/features/analytics/index.js';
 import type { HostedServer, ProjectServerHost } from '../../src/features/servers/index.js';
 import type { Reading, UsageSource } from '../../src/features/usage/index.js';
 import { createPool, type Pool } from '../../src/platform/db.js';
@@ -81,11 +82,50 @@ export function fakeServerHost(w: World): ProjectServerHost {
   };
 }
 
+/** An analytics provider in memory, which creates sites like Umami does. */
+export function fakeAnalytics(w: World): SiteAnalytics {
+  let next = 0;
+  return {
+    id: 'umami',
+    async listSites() {
+      return [...w.analyticsSites.entries()].map(([ref, s]) => ({
+        ref,
+        name: s.name,
+        domain: null,
+      }));
+    },
+    async createSite(_c, input) {
+      const ref = `site-${++next}-${input.name}`;
+      w.analyticsSites.set(ref, { name: input.name, pageviews: 0 });
+      return {
+        ref,
+        name: input.name,
+        domain: input.domain,
+        script: `<script data-website-id="${ref}"></script>`,
+      };
+    },
+    async stats(_c, site) {
+      const s = w.analyticsSites.get(site);
+      if (!s) throw new ProviderError('umami', 404, 'Answered 404');
+      return {
+        pageviews: s.pageviews,
+        visitors: Math.round(s.pageviews / 2),
+        visits: Math.round(s.pageviews / 1.5),
+        bounceRate: 0.4,
+        topPages: [{ path: '/', views: s.pageviews }],
+        topReferrers: [],
+      };
+    },
+  };
+}
+
 export interface World {
   proposals: Map<string, Proposal[]>;
   proposalFiles: Map<string, ChangedFile[]>;
   statuses: { fullName: string; sha: string; state: string }[];
   merged: string[];
+  /** Analytics sites in memory: id → stats served. */
+  analyticsSites: Map<string, { name: string; pageviews: number }>;
   /** Repositories marked as starters. */
   templates: Set<string>;
   /** Pull requests Pono opened with files: `fullName` → the last one. */
@@ -110,6 +150,7 @@ export function world(): World {
     proposalFiles: new Map(),
     statuses: [],
     merged: [],
+    analyticsSites: new Map(),
     templates: new Set(),
     opened: new Map(),
     rollbacks: [],
@@ -240,7 +281,9 @@ export function testApp(): TestApp {
       fakeConnectable('code', 'code_host'),
       fakeConnectable('host', 'hosting'),
       fakeConnectable('db', 'database'),
+      fakeConnectable('umami', 'analytics'),
     ],
+    analytics: [fakeAnalytics(w)],
     adapters: fakeAdapters(w),
     usageSources: [fakeUsage(w)],
     serverHost: fakeServerHost(w),

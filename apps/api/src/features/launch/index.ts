@@ -4,6 +4,7 @@ import type { Actor, AppEnv } from '../../platform/context.js';
 import { withOrganization } from '../../platform/db.js';
 import { AppError } from '../../platform/errors.js';
 import { ProviderError } from '../../platform/http.js';
+import { siteForLaunch, type SiteAnalytics } from '../analytics/index.js';
 import { catalogFor, type Catalog } from '../catalog/index.js';
 import { activeCredentials } from '../connections/index.js';
 import { record } from '../journal/index.js';
@@ -22,6 +23,7 @@ export const IMPECCABLE_VERSION = '4.8.0';
 
 export interface LaunchDeps extends ProjectsDeps, ServersDeps {
   catalog: Catalog;
+  analytics?: SiteAnalytics[];
 }
 
 export interface LaunchInput {
@@ -46,6 +48,7 @@ export function manifest(input: {
   template: string;
   skills: string[];
   agent: Agent;
+  analytics?: { provider: 'umami' | 'posthog'; website: string };
 }): string {
   return writeManifest({
     version: 1,
@@ -58,6 +61,7 @@ export function manifest(input: {
     },
     skills: { use: input.skills, local: '.pono/skills/' },
     release: { declared_destructions: [] },
+    ...(input.analytics ? { analytics: input.analytics } : {}),
   });
 }
 
@@ -103,6 +107,13 @@ export async function launchProject(
   if (!host || !credential)
     throw new AppError('connection.code_host_missing', 409, 'Connect your code host first.');
 
+  // Visits are counted from the first day when an analytics provider is connected (D-017).
+  const site = await siteForLaunch(
+    { pool: deps.pool, sealer: deps.sealer, analytics: deps.analytics ?? [] },
+    actor,
+    input.name,
+  ).catch(() => null);
+
   let repository;
   try {
     repository = await host.createRepository(credential, {
@@ -116,6 +127,7 @@ export async function launchProject(
           template: template.id,
           skills: template.skills,
           agent: input.agent,
+          ...(site ? { analytics: { provider: site.provider, website: site.site } } : {}),
         }),
       },
     });
@@ -136,6 +148,7 @@ export async function launchProject(
       PONO_TEMPLATE: template.id,
       // Pinned and reviewed design skills (D-016): the agent installs this exact version.
       ...(template.skills.includes('impeccable') ? { PONO_IMPECCABLE: IMPECCABLE_VERSION } : {}),
+      ...(site ? { PONO_ANALYTICS_SCRIPT: site.script } : {}),
     },
     ...(input.sleepServerId ? { sleepServerId: input.sleepServerId } : {}),
   });

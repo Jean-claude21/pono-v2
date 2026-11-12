@@ -2,6 +2,7 @@ import { createFileRoute } from '@tanstack/react-router';
 import { useState } from 'react';
 import { ProjectManifest } from '@/features/projects/ProjectManifest';
 import { ProjectServer } from '@/features/projects/ProjectServer';
+import { ProjectVisits } from '@/features/projects/ProjectVisits';
 import { Releases } from '@/features/releases/Releases';
 import { Shell } from '@/features/shell/Shell';
 import { api, useApi, type DeploymentView, type JournalLine, type ProjectView } from '@/lib/api';
@@ -108,6 +109,7 @@ function Project({ id }: Readonly<{ id: string }>) {
 
       <ProjectServer projectId={id} />
       <ProjectManifest projectId={id} />
+      <ProjectVisits projectId={id} />
       <Releases projectId={id} />
 
       <h3 className="section-title mono-label">{m.project_deployments()}</h3>

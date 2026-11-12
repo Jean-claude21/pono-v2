@@ -103,7 +103,8 @@ _Build on Pono's base: Hono, TanStack Start, Postgres on Neon. Use on a project 
   row-level security on every table that holds a person's data.
 - Console: TanStack Start, the project's design tokens, Paraglide for every visible text.
 - Database: Neon, one branch per environment; the development branch never holds production keys.
-- Analytics: Umami, its script added once in the root layout, its website named in `pono.yaml`.
+- Analytics: Umami. On a Pono server the tag is in `PONO_ANALYTICS_SCRIPT`: add it once to the root
+  layout; the site is already named in `pono.yaml`. Never track an admin page or a person's data.
 
 ## impeccable · design
 

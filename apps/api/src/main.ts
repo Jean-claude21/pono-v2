@@ -1,3 +1,5 @@
+import { posthogAnalytics } from './infrastructure/providers/posthog.js';
+import { umamiCloud, umamiSelfHosted } from './infrastructure/providers/umami.js';
 import { serve } from '@hono/node-server';
 import { createApp } from './app.js';
 import { loadCatalog } from './features/catalog/index.js';
@@ -44,6 +46,9 @@ const netlify = netlifyHosting(fetch);
 const cloudflare = cloudflareHosting(fetch);
 const neon = neonDatabase(fetch);
 const openai = openaiUsage(fetch);
+const umami = umamiCloud(fetch);
+const umamiSelf = umamiSelfHosted(fetch);
+const posthog = posthogAnalytics(fetch);
 
 const app = createApp({
   pool: createPool(config.PONO_DATABASE_URL),
@@ -51,7 +56,8 @@ const app = createApp({
   publicUrl: config.PONO_PUBLIC_URL,
   secureCookies: config.NODE_ENV === 'production',
   identity,
-  connectable: [github, netlify, cloudflare, neon, openai],
+  connectable: [github, netlify, cloudflare, neon, openai, umami, umamiSelf, posthog],
+  analytics: [umami, umamiSelf, posthog],
   usageSources: [
     githubUsage(fetch),
     netlifyUsage(fetch),
