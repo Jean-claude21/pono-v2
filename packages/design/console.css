@@ -140,7 +140,7 @@
 .log .e { color: var(--failing); }
 .log .o { color: var(--healthy); }
 .activity { border-top: 1px solid var(--hairline); margin-top: 8px; }
-.activity li { list-style: none; display: grid; grid-template-columns: 64px 1fr; gap: 12px; padding: 10px 0; border-bottom: 1px solid var(--hairline); font-size: 14px; }
+.activity li { list-style: none; display: grid; grid-template-columns: 120px 1fr; gap: 12px; padding: 10px 0; border-bottom: 1px solid var(--hairline); font-size: 14px; }
 .activity li .figures { font-size: 12px; color: var(--ink-mute); padding-top: 2px; }
 .activity { padding: 0; }
 

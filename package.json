@@ -15,7 +15,8 @@
     "test": "vitest run",
     "dev:api": "pnpm --filter @pono/api dev",
     "dev:web": "pnpm --filter @pono/web dev",
-    "db:migrate": "pnpm --filter @pono/api db:migrate"
+    "db:migrate": "pnpm --filter @pono/api db:migrate",
+    "db:dev": "pnpm --filter @pono/api db:dev"
   },
   "devDependencies": {
     "@eslint/js": "^9.39.5",

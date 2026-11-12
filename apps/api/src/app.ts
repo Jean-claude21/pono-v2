@@ -1,13 +1,41 @@
 import { Hono } from 'hono';
-import { healthRoutes, type HealthDeps } from './features/health/index.js';
+import { connectionRoutes, type Connectable } from './features/connections/index.js';
+import { healthRoutes } from './features/health/index.js';
+import {
+  authRoutes,
+  meRoutes,
+  requireSession,
+  type IdentityProvider,
+} from './features/identity/index.js';
+import { projectRoutes, type WorkshopAdapters } from './features/projects/index.js';
+import type { AppEnv } from './platform/context.js';
+import { ping, type Pool } from './platform/db.js';
 import { AppError, errorBody } from './platform/errors.js';
+import type { Sealer } from './platform/secrets.js';
 
-export type AppDeps = HealthDeps;
+export interface AppDeps {
+  pool: Pool;
+  sealer: Sealer;
+  publicUrl: string;
+  secureCookies: boolean;
+  identity: IdentityProvider[];
+  connectable: Connectable[];
+  adapters: WorkshopAdapters;
+  now: () => Date;
+}
 
 /** The API: every route, and errors in one shape with a stable code (FR-008). */
-export function createApp(deps: AppDeps): Hono {
-  const app = new Hono();
-  app.route('/health', healthRoutes(deps));
+export function createApp(deps: AppDeps): Hono<AppEnv> {
+  const app = new Hono<AppEnv>();
+  app.route('/health', healthRoutes({ databaseUp: () => ping(deps.pool) }));
+  app.route('/auth', authRoutes(deps));
+
+  const v1 = new Hono<AppEnv>();
+  v1.use('*', requireSession(deps));
+  v1.route('/me', meRoutes(deps));
+  v1.route('/connections', connectionRoutes(deps));
+  v1.route('/', projectRoutes(deps));
+  app.route('/v1', v1);
 
   app.notFound((c) => c.json(errorBody('route.not_found', 'No such route.'), 404));
   app.onError((error, c) => {
