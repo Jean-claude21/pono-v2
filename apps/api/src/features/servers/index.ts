@@ -3,6 +3,7 @@ import { z } from 'zod';
 import type { Actor, AppEnv } from '../../platform/context.js';
 import { withOrganization, type Client, type Pool } from '../../platform/db.js';
 import { AppError } from '../../platform/errors.js';
+import type { Sealer } from '../../platform/secrets.js';
 import { record } from '../journal/index.js';
 import type { InternalUsage, Reading } from '../usage/index.js';
 import {
@@ -27,6 +28,8 @@ export {
 
 export interface ServersDeps {
   pool: Pool;
+  /** Opens the project's development variables for its server only (D-007). */
+  sealer: Sealer;
   serverHost: ProjectServerHost;
   /** A server's spending cap for the month (D-004). */
   serverBudgetMicros: number;
@@ -168,12 +171,22 @@ export async function allocateServer(
     if (existing.rowCount)
       throw new AppError('server.exists', 409, 'This project already has its server.');
     await ensureRoom(client);
-    return p[0];
+    // The person's development values, opened for this server only; never a PONO_ name (D-007).
+    const variables = (
+      await client.query<{ name: string; sealed_value: string }>(
+        'SELECT name, sealed_value FROM project_variables WHERE project_id = $1 AND sealed_value IS NOT NULL',
+        [projectId],
+      )
+    ).rows.flatMap((v) => {
+      const value = deps.sealer.open(v.sealed_value);
+      return value === null ? [] : [[v.name, value] as const];
+    });
+    return { ...p[0], variables: Object.fromEntries(variables) };
   });
   const hosted = await deps.serverHost.create({
     name: `pono-${project.name}`,
     agent: options.agent,
-    env: { PONO_PROJECT: project.repository, ...(options.env ?? {}) },
+    env: { ...project.variables, PONO_PROJECT: project.repository, ...(options.env ?? {}) },
     metadata: { organization: actor.organizationId, project: project.id },
     budgetMicros: deps.serverBudgetMicros,
     idleSeconds: deps.serverIdleSeconds,

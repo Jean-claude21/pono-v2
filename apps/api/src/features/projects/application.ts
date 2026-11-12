@@ -12,6 +12,8 @@ export interface ProjectsDeps {
   sealer: Sealer;
   adapters: WorkshopAdapters;
   now: () => Date;
+  /** Called once a project is imported: the manifest is read, or proposed (D-014). */
+  afterImport?: (actor: Actor, projectId: string, options: { propose: boolean }) => Promise<void>;
 }
 
 type Found = 'found' | 'missing' | 'unknown';
@@ -59,6 +61,9 @@ export async function importProject(
   deps: ProjectsDeps,
   actor: Actor,
   fullName: string,
+  from: { origin: 'template' | 'adopted'; template?: string; proposeManifest?: boolean } = {
+    origin: 'adopted',
+  },
 ): Promise<string> {
   const creds = await credentials(deps, actor.organizationId);
   const host = codeHostOf(deps, creds);
@@ -113,8 +118,8 @@ export async function importProject(
     const { rows } = await client.query<{ id: string }>(
       `INSERT INTO projects (organization_id, name, repository, default_branch, hosting_provider, hosting_ref,
          hosting_status, database_provider, database_ref, database_status, production_url, link_status,
-         last_commit_at, state, state_reason)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, 'unknown', $12, 'healthy', 'nominal')
+         last_commit_at, state, state_reason, origin, template)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, 'unknown', $12, 'healthy', 'nominal', $13, $14)
        RETURNING id`,
       [
         actor.organizationId,
@@ -129,6 +134,8 @@ export async function importProject(
         databaseStatus,
         hosting?.site.productionUrl ?? null,
         repository.pushedAt,
+        from.origin,
+        from.template ?? null,
       ],
     );
     const projectId = rows[0]!.id;
@@ -143,6 +150,10 @@ export async function importProject(
     return projectId;
   });
   await refreshProject(deps, actor, id);
+  // The manifest never blocks an import: a failure leaves it to be read again later.
+  await deps
+    .afterImport?.(actor, id, { propose: from.proposeManifest ?? true })
+    .catch(() => undefined);
   return id;
 }
 

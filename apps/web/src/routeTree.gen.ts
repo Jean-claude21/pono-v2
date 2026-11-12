@@ -12,6 +12,7 @@ import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as AdminRouteImport } from './routes/admin'
 import { Route as AgentsRouteImport } from './routes/agents'
+import { Route as AuthorizeRouteImport } from './routes/authorize'
 import { Route as CatalogRouteImport } from './routes/catalog'
 import { Route as ConnectionsRouteImport } from './routes/connections'
 import { Route as HealthRouteImport } from './routes/health'
@@ -34,6 +35,11 @@ const AdminRoute = AdminRouteImport.update({
 const AgentsRoute = AgentsRouteImport.update({
   id: '/agents',
   path: '/agents',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AuthorizeRoute = AuthorizeRouteImport.update({
+  id: '/authorize',
+  path: '/authorize',
   getParentRoute: () => rootRouteImport,
 } as any)
 const CatalogRoute = CatalogRouteImport.update({
@@ -81,6 +87,7 @@ export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/admin': typeof AdminRoute
   '/agents': typeof AgentsRoute
+  '/authorize': typeof AuthorizeRoute
   '/catalog': typeof CatalogRoute
   '/connections': typeof ConnectionsRoute
   '/health': typeof HealthRoute
@@ -94,6 +101,7 @@ export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/admin': typeof AdminRoute
   '/agents': typeof AgentsRoute
+  '/authorize': typeof AuthorizeRoute
   '/catalog': typeof CatalogRoute
   '/connections': typeof ConnectionsRoute
   '/health': typeof HealthRoute
@@ -108,6 +116,7 @@ export interface FileRoutesById {
   '/': typeof IndexRoute
   '/admin': typeof AdminRoute
   '/agents': typeof AgentsRoute
+  '/authorize': typeof AuthorizeRoute
   '/catalog': typeof CatalogRoute
   '/connections': typeof ConnectionsRoute
   '/health': typeof HealthRoute
@@ -123,6 +132,7 @@ export interface FileRouteTypes {
     | '/'
     | '/admin'
     | '/agents'
+    | '/authorize'
     | '/catalog'
     | '/connections'
     | '/health'
@@ -136,6 +146,7 @@ export interface FileRouteTypes {
     | '/'
     | '/admin'
     | '/agents'
+    | '/authorize'
     | '/catalog'
     | '/connections'
     | '/health'
@@ -149,6 +160,7 @@ export interface FileRouteTypes {
     | '/'
     | '/admin'
     | '/agents'
+    | '/authorize'
     | '/catalog'
     | '/connections'
     | '/health'
@@ -163,6 +175,7 @@ export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   AdminRoute: typeof AdminRoute
   AgentsRoute: typeof AgentsRoute
+  AuthorizeRoute: typeof AuthorizeRoute
   CatalogRoute: typeof CatalogRoute
   ConnectionsRoute: typeof ConnectionsRoute
   HealthRoute: typeof HealthRoute
@@ -194,6 +207,13 @@ declare module '@tanstack/react-router' {
       path: '/agents'
       fullPath: '/agents'
       preLoaderRoute: typeof AgentsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/authorize': {
+      id: '/authorize'
+      path: '/authorize'
+      fullPath: '/authorize'
+      preLoaderRoute: typeof AuthorizeRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/catalog': {
@@ -259,6 +279,7 @@ const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AdminRoute: AdminRoute,
   AgentsRoute: AgentsRoute,
+  AuthorizeRoute: AuthorizeRoute,
   CatalogRoute: CatalogRoute,
   ConnectionsRoute: ConnectionsRoute,
   HealthRoute: HealthRoute,

@@ -6,7 +6,13 @@
 const API_URL = process.env.PONO_API_URL ?? 'http://localhost:8787';
 
 export function isApiPath(pathname: string): boolean {
-  return pathname.startsWith('/auth/') || pathname.startsWith('/v1/') || pathname === '/mcp';
+  return (
+    pathname.startsWith('/auth/') ||
+    pathname.startsWith('/v1/') ||
+    pathname.startsWith('/oauth/') ||
+    pathname.startsWith('/.well-known/oauth-') ||
+    pathname === '/mcp'
+  );
 }
 
 export async function relay(request: Request): Promise<Response> {

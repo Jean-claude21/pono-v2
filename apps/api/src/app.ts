@@ -1,7 +1,11 @@
 import { Hono } from 'hono';
 import { adminRoutes } from './features/admin/index.js';
+import { analyticsRoutes, type SiteAnalytics } from './features/analytics/index.js';
 import { billingWebhook, planRoutes, type BillingProvider } from './features/billing/index.js';
 import { agentRoutes, mcpHandler } from './features/agents/index.js';
+import { oauthMetadata, oauthRoutes } from './features/agents/oauth.js';
+import { variableRoutes } from './features/variables/index.js';
+import { rateLimit } from './platform/rate-limit.js';
 import { catalogRoutes, type Catalog } from './features/catalog/index.js';
 import { connectionRoutes, type Connectable } from './features/connections/index.js';
 import { healthRoutes } from './features/health/index.js';
@@ -12,6 +16,7 @@ import {
   type IdentityProvider,
 } from './features/identity/index.js';
 import { launchRoutes } from './features/launch/index.js';
+import { manifestRoutes, syncManifest, type ManifestDeps } from './features/manifest/index.js';
 import { projectRoutes, type WorkshopAdapters } from './features/projects/index.js';
 import { releaseRoutes } from './features/releases/index.js';
 import { serverRoutes, serversUsage, type ProjectServerHost } from './features/servers/index.js';
@@ -36,14 +41,32 @@ export interface AppDeps {
   serverIdleSeconds: number;
   catalog: Catalog;
   billing: BillingProvider;
+  /** Where projects' visits are counted (D-017): Umami, PostHog. */
+  analytics?: SiteAnalytics[];
   admins: string[];
   serverAccount?: () => Promise<{ balanceMicros: number; activeLimit: number } | null>;
+  /** Requests per minute and per caller; tests raise them. */
+  rateLimits?: { auth: number; v1: number; mcp: number };
   now: () => Date;
 }
 
 /** The API: every route, and errors in one shape with a stable code (FR-008). */
-export function createApp(deps: AppDeps): Hono<AppEnv> {
+export function createApp(appDeps: AppDeps): Hono<AppEnv> {
+  const deps: AppDeps & ManifestDeps & { analytics: SiteAnalytics[] } = {
+    ...appDeps,
+    analytics: appDeps.analytics ?? [],
+    afterImport: async (actor, projectId, options) => {
+      await syncManifest(deps, actor, projectId, options);
+    },
+  };
   const app = new Hono<AppEnv>();
+  const limits = appDeps.rateLimits ?? { auth: 30, v1: 600, mcp: 240 };
+  app.use('/auth/*', rateLimit({ name: 'auth', windowMs: 60_000, max: limits.auth }));
+  app.use('/oauth/*', rateLimit({ name: 'oauth', windowMs: 60_000, max: limits.auth }));
+  app.use('/v1/*', rateLimit({ name: 'v1', windowMs: 60_000, max: limits.v1 }));
+  app.use('/mcp', rateLimit({ name: 'mcp', windowMs: 60_000, max: limits.mcp }));
+  app.route('/.well-known', oauthMetadata(deps));
+  app.route('/oauth', oauthRoutes(deps));
   app.route('/health', healthRoutes({ databaseUp: () => ping(deps.pool) }));
   app.route('/auth', authRoutes(deps));
 
@@ -52,13 +75,16 @@ export function createApp(deps: AppDeps): Hono<AppEnv> {
   v1.route('/me', meRoutes(deps));
   v1.route('/connections', connectionRoutes(deps));
   v1.route('/', projectRoutes(deps));
+  v1.route('/', manifestRoutes(deps));
+  v1.route('/', analyticsRoutes(deps));
+  v1.route('/', variableRoutes(deps));
   v1.route(
     '/',
     usageRoutes({ ...deps, internalUsage: [...(deps.internalUsage ?? []), serversUsage()] }),
   );
   v1.route('/', serverRoutes(deps));
   v1.route('/', releaseRoutes(deps));
-  v1.route('/catalog', catalogRoutes(deps.catalog));
+  v1.route('/catalog', catalogRoutes(deps));
   v1.route('/launch', launchRoutes(deps));
   v1.route('/agents', agentRoutes(deps));
   v1.route('/plan', planRoutes(deps));

@@ -1,4 +1,5 @@
 import { createFileRoute } from '@tanstack/react-router';
+import { AdminCatalog } from '@/features/admin/AdminCatalog';
 import { Shell } from '@/features/shell/Shell';
 import { api, useApi } from '@/lib/api';
 import { ago, label, money } from '@/lib/labels';
@@ -169,6 +170,7 @@ function Admin() {
             ))}
         </tbody>
       </table>
+      <AdminCatalog />
     </>
   );
 }

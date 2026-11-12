@@ -27,10 +27,13 @@ describe('catalog (phase 6)', () => {
   });
 
   it('parses a skill section', () => {
-    expect(parseSkills('## a\n_Does a._\n\n- one\n## b\n_Does b._\nbody')).toEqual([
-      { name: 'a', description: 'Does a.', body: '- one' },
-      { name: 'b', description: 'Does b.', body: 'body' },
+    expect(
+      parseSkills('## a · safety\n_Does a._\n\n- one\n## b · design\n_Does b._\nbody'),
+    ).toEqual([
+      { name: 'a', family: 'safety', description: 'Does a.', body: '- one' },
+      { name: 'b', family: 'design', description: 'Does b.', body: 'body' },
     ]);
+    expect(() => parseSkills('## a\n_Does a._\n')).toThrow(/family/);
   });
 
   it('serves templates and skills to a signed-in person', async () => {

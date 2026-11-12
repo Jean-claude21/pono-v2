@@ -166,3 +166,94 @@ Codex, OpenCode, ou aucun.
 Le rôle de l'API ne peut pas écrire le plan d'une organisation ; seule la fonction appelée par un
 événement signé du fournisseur de paiement le fait. Sans clé Stripe, un fournisseur de développement
 signe localement ; en production sans clé, changer de plan est refusé.
+
+---
+
+## D-014 — `pono.yaml` à la racine, et tout projet peut être adopté
+
+**Tranché le 2026-11-12**, sur la demande de l'auteur (« peu importe le projet, on doit pouvoir le
+faire »).
+
+- Le manifeste est `pono.yaml`, à la racine : YAML plutôt que HCL ou JSON, pour les commentaires,
+  la lecture humaine et l'écriture sûre par les agents ; un schéma strict versionné le valide.
+- Il ne contient que des identifiants : ni secret, ni mode de mise en production (D-006).
+- Un projet entre par un template ou par adoption. L'adoption pré-remplit le fichier depuis
+  `project.yaml`, `.fluxio/project.json`, `stack.hcl` et la détection, et le propose en pull
+  request. Pono n'écrit jamais la branche de production.
+- Les skills ont trois familles. La sûreté est proposée partout ; l'architecture et le design de
+  Pono ne s'imposent qu'aux projets lancés depuis un template.
+
+**Ce qui la renverserait.** Un besoin de configuration que YAML exprime mal (logique, héritage).
+
+---
+
+## D-015 — Trois niveaux, et GitHub comme porte d'entrée
+
+**Tranché le 2026-11-12.**
+
+- Trois niveaux : **guidé** (Pono choisit tout sur sa base), **au choix** (deux ou trois templates
+  et quelques options), **expert** (sa technologie, son architecture). Le niveau appartient à la
+  personne ; la console et les agents lisent la même réponse.
+- On entre par GitHub : la connexion relie le compte et les dépôts en un geste, puisque chaque
+  projet vit dans un dépôt de la personne. Celui qui n'a pas de compte est guidé vers la création
+  d'un compte gratuit.
+
+**Ce que ça coûte.** Une personne sans GitHub fait un pas de plus. **Ce qui la renverserait.** Un
+public qui ne veut pas de code chez lui : un dépôt hébergé par Pono deviendrait alors nécessaire.
+
+---
+
+## D-016 — Le catalogue a trois niveaux, et le partage passe par l'exploitant
+
+**Tranché le 2026-11-12.**
+
+- **Officiel** : les fichiers de Pono, et les templates que l'exploitant importe depuis un dépôt
+  (`pono-template.yaml`, `.pono/skills/`). Le dépôt devient le dépôt de départ.
+- **Privé** : ce qu'une organisation crée, dans la console ou par MCP. Les skills de sûreté restent
+  ceux de Pono ; un nom officiel ne peut pas être repris.
+- **Partagé** : ce que l'exploitant a relu et approuvé. Un skill est une consigne exécutée par les
+  agents des autres : sans relecture, ce serait une porte d'injection.
+- Les skills tiers (Impeccable, Apache-2.0) sont épinglés à une version relue, changée par commit.
+
+**Ce qui la renverserait.** Un volume de propositions qu'une personne ne peut plus relire : il
+faudrait alors des relecteurs de confiance, ou une analyse automatique en premier filtre.
+
+---
+
+## D-017 — Les visites se lisent chez Umami, puis PostHog, derrière un port
+
+**Tranché le 2026-11-12**, sur la demande de l'auteur (« on va utiliser Umami maintenant »).
+
+- Le port `SiteAnalytics` ne nomme aucun fournisseur ; Umami (Cloud ou auto-hébergé) est le premier
+  adaptateur, PostHog le second.
+- Chaque personne connecte son propre compte ; Pono lit, il ne garde aucune donnée de visite.
+- Un projet lancé reçoit son site dès le premier jour ; le site est nommé dans `pono.yaml`.
+- La console de Pono se compte avec Umami, sans cookie, jamais sur les pages de l'exploitant.
+
+---
+
+## D-018 — Les tâches de fond sur pg-boss, Coolify pour le reste
+
+**Tranché le 2026-11-12**, en appliquant D-002 (pg-boss « quand la première tâche périodique
+arrive ») et D-006.
+
+- Un cycle toutes les 15 minutes, file singleton : serveurs, projets, consommation, retour arrière
+  automatique, alertes. Il agit au canal `system`, pour aucune personne, et ne peut ni valider, ni
+  changer un mode.
+- Les alertes partent par email (Resend), avec la clé de Pono ; une alerte n'est envoyée qu'une fois.
+- Coolify héberge ce que Netlify et Cloudflare ne font pas tourner. N'ayant pas de retour arrière,
+  il est épinglé au commit précédent ; il le reste jusqu'à ce qu'une personne le remette à HEAD.
+
+---
+
+## D-019 — OAuth 2.1 pour les clients MCP, variables scellées pour les serveurs
+
+**Tranché le 2026-11-12**, en suite de D-007 et D-011.
+
+- Pono est son propre serveur d'autorisation : clients publics enregistrés dynamiquement, PKCE S256
+  seulement, approbation par une personne dans la console. L'accès accordé devient un jeton d'agent
+  ordinaire : mêmes droits que la personne, journal, coupure d'un clic. Pas de jeton de
+  rafraîchissement : l'accès dure jusqu'à ce qu'on le coupe.
+- Les variables de développement sont tapées par une personne, scellées, envoyées au seul serveur
+  du projet au démarrage. Un agent ne voit que des noms et peut en demander un.
+- Les noms `PONO_` sont réservés à Pono.

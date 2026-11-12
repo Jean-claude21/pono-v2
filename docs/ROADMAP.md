@@ -118,6 +118,48 @@ quel.
 
 **Preuve.** Un premier paiement reçu ; l'administration voit coût et revenu par organisation.
 
+## Phase 8 — Le manifeste et l'adoption · `009-manifest`
+
+> **Codée et testée le 2026-11-12.** Reste le schéma JSON publié à l'adresse de sa ligne `$schema`.
+
+**Preuve.** Un dépôt sans manifeste, dans n'importe quelle technologie, reçoit sa PR `pono/manifest`.
+
+## Phase 9 — Le niveau de la personne · `010-profile`
+
+> **Codée et testée le 2026-11-12.** Reste l'application GitHub en production (auteur).
+
+**Preuve.** Le niveau choisi dans la console guide l'agent, et l'inverse.
+
+## Phase 10 — Le catalogue sur trois niveaux · `011-catalog`
+
+> **Codée et testée le 2026-11-12.** Restent les dépôts de départ officiels de la base Pono (auteur).
+
+**Preuve.** Un template importé par l'exploitant lance un projet généré depuis son dépôt.
+
+## Phase 11 — Les visites · `012-analytics`
+
+> **Codée et testée le 2026-11-12**, sur réponses enregistrées. Reste le compte Umami (auteur).
+
+**Preuve.** Un projet lancé compte ses visites dès le premier jour, lues chez Umami.
+
+## Phase 12 — Les tâches de fond · `013-operations`
+
+> **Codée et testée le 2026-11-12** ; la tâche pg-boss tourne sur l'API locale. Restent la clé
+> Resend et une instance Coolify (auteur).
+
+**Preuve.** Une production tombée après une fusion automatique revient en arrière seule, une fois.
+
+## Phase 13 — L'accès des agents · `014-agent-access`
+
+> **Codée et testée le 2026-11-12.** Reste la preuve du connecteur Claude.ai, avec le domaine.
+
+**Preuve.** Le connecteur Claude.ai se relie par OAuth et reprend un projet.
+
+## Phase 14 — Preuves à plusieurs · `015-live-proofs`
+
+> **Prouvée le 2026-11-12** : trois personnes, trois serveurs Agent37 réels, limite et isolation
+> tenues, tout rendu.
+
 ---
 
 ## Backlog

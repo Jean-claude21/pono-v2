@@ -64,7 +64,12 @@ export function useApi<T>(path: string): Loaded<T> {
 
 // What the API answers (apps/api/src/features/*).
 export interface Me {
-  person: { id: string; login: string; name: string | null };
+  person: {
+    id: string;
+    login: string;
+    name: string | null;
+    level: 'guided' | 'choosing' | 'expert' | null;
+  };
   organization: { id: string; name: string; role: string } | null;
   isAdmin: boolean;
 }

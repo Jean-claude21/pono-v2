@@ -1,5 +1,6 @@
 import { createFileRoute } from '@tanstack/react-router';
 import { useState, type FormEvent } from 'react';
+import { OwnSkills, type SkillCard } from '@/features/catalog/OwnSkills';
 import { LimitChooser, type LimitDetail } from '@/features/servers/LimitChooser';
 import { Shell } from '@/features/shell/Shell';
 import { api, useApi } from '@/lib/api';
@@ -22,6 +23,7 @@ interface Template {
   description: { fr: string; en: string };
   stack: string[];
   skills: string[];
+  scope?: string;
 }
 
 interface Launched {
@@ -33,7 +35,7 @@ const AGENTS = ['claude-code', 'codex', 'opencode', 'none'] as const;
 
 function Catalog() {
   const templates = useApi<{ templates: Template[] }>('/v1/catalog/templates');
-  const skills = useApi<{ skills: { name: string; description: string }[] }>('/v1/catalog/skills');
+  const skills = useApi<{ skills: SkillCard[] }>('/v1/catalog/skills');
   const [chosen, setChosen] = useState<Template | null>(null);
   const locale = getLocale() === 'en' ? 'en' : 'fr';
   return (
@@ -56,7 +58,10 @@ function Catalog() {
               aria-pressed={chosen?.id === t.id}
               onClick={() => setChosen(t)}
             >
-              <span className="mono-label">{label('category', t.category)}</span>
+              <span className="mono-label">
+                {label('category', t.category)}
+                {t.scope && t.scope !== 'pono' ? ` · ${label('scope', t.scope)}` : ''}
+              </span>
               <h4>{t.name[locale]}</h4>
               <p>{t.description[locale]}</p>
               <div className="row">
@@ -77,10 +82,16 @@ function Catalog() {
               <tr key={s.name}>
                 <td className="project figures">{s.name}</td>
                 <td className="small soft">{s.description}</td>
+                <td className="small mute">
+                  {label('family', s.family)} · {label('scope', s.scope)}
+                </td>
               </tr>
             ))}
         </tbody>
       </table>
+      {skills.result?.ok && (
+        <OwnSkills skills={skills.result.data.skills} onChange={skills.reload} />
+      )}
     </>
   );
 }

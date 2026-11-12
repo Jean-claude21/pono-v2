@@ -1,5 +1,6 @@
 import { createFileRoute } from '@tanstack/react-router';
 import { useState } from 'react';
+import { LevelChooser, type Level } from '@/features/shell/LevelChooser';
 import { Shell } from '@/features/shell/Shell';
 import { api, useApi } from '@/lib/api';
 import { label, money } from '@/lib/labels';
@@ -21,6 +22,7 @@ interface PlanView {
 
 function Settings() {
   const data = useApi<PlanView>('/v1/plan');
+  const me = useApi<{ person: { level: Level | null } }>('/v1/me');
   const [error, setError] = useState<string | null>(null);
   if (!data.result) return <p className="mute">{m.loading()}</p>;
   if (!data.result.ok) return <p className="notice">{label('error', data.result.error.code)}</p>;
@@ -40,6 +42,8 @@ function Settings() {
       <div className="topline">
         <h1>{m.settings_title()}</h1>
       </div>
+      <h3 className="section-title mono-label">{m.settings_level()}</h3>
+      {me.result?.ok && <LevelChooser current={me.result.data.person.level} onChosen={me.reload} />}
       <h3 className="section-title mono-label">{m.settings_plan()}</h3>
       {provider === 'none' && <p className="notice">{m.settings_billing_none()}</p>}
       {error && <p className="notice warning">{error}</p>}

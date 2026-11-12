@@ -61,18 +61,31 @@ export function githubCodeHost(fetchImpl: Fetch): CodeHost & Connectable {
     async createRepository(token, input) {
       let created: RepoAnswer;
       try {
-        created = await fetchJson<RepoAnswer>(fetchImpl, {
-          provider: ID,
-          url: `${API}/user/repos`,
-          method: 'POST',
-          headers: headers(token),
-          body: {
-            name: input.name,
-            private: input.private,
-            description: input.description,
-            auto_init: true,
-          },
-        });
+        created = input.starter
+          ? await fetchJson<RepoAnswer>(fetchImpl, {
+              provider: ID,
+              url: `${API}/repos/${input.starter}/generate`,
+              method: 'POST',
+              headers: headers(token),
+              body: {
+                name: input.name,
+                private: input.private,
+                description: input.description,
+                include_all_branches: false,
+              },
+            })
+          : await fetchJson<RepoAnswer>(fetchImpl, {
+              provider: ID,
+              url: `${API}/user/repos`,
+              method: 'POST',
+              headers: headers(token),
+              body: {
+                name: input.name,
+                private: input.private,
+                description: input.description,
+                auto_init: true,
+              },
+            });
       } catch (error) {
         if (error instanceof ProviderError && error.status === 422) {
           throw new ProviderError(ID, 409, 'A repository of that name exists.');
@@ -80,18 +93,69 @@ export function githubCodeHost(fetchImpl: Fetch): CodeHost & Connectable {
         throw error;
       }
       for (const [path, content] of Object.entries(input.files)) {
-        await fetchJson(fetchImpl, {
-          provider: ID,
-          url: `${API}/repos/${created.full_name}/contents/${path}`,
-          method: 'PUT',
-          headers: headers(token),
-          body: {
-            message: `chore: ${path} by Pono`,
-            content: Buffer.from(content, 'utf8').toString('base64'),
-          },
-        });
+        // A generated repository fills in a moment: its first write may answer 404 or 409.
+        for (let attempt = 0; ; attempt++) {
+          try {
+            let sha: string | undefined;
+            try {
+              sha = (
+                await fetchJson<{ sha: string }>(fetchImpl, {
+                  provider: ID,
+                  url: `${API}/repos/${created.full_name}/contents/${path}`,
+                  headers: headers(token),
+                })
+              ).sha;
+            } catch (error) {
+              if (!(error instanceof ProviderError && error.status === 404)) throw error;
+            }
+            await fetchJson(fetchImpl, {
+              provider: ID,
+              url: `${API}/repos/${created.full_name}/contents/${path}`,
+              method: 'PUT',
+              headers: headers(token),
+              body: {
+                message: `chore: ${path} by Pono`,
+                content: Buffer.from(content, 'utf8').toString('base64'),
+                ...(sha ? { sha } : {}),
+              },
+            });
+            break;
+          } catch (error) {
+            const retry =
+              error instanceof ProviderError && (error.status === 404 || error.status === 409);
+            if (!retry || attempt >= 5) throw error;
+            await new Promise((r) => setTimeout(r, 1000 * (attempt + 1)));
+          }
+        }
       }
       return repository(created);
+    },
+    async listDirectory(token, fullName, path, ref) {
+      try {
+        const entries = await fetchJson<{ name: string; type: string }[] | { type: string }>(
+          fetchImpl,
+          {
+            provider: ID,
+            url: `${API}/repos/${fullName}/contents/${path}?ref=${encodeURIComponent(ref)}`,
+            headers: headers(token),
+          },
+        );
+        return Array.isArray(entries)
+          ? entries.filter((e) => e.type === 'file').map((e) => e.name)
+          : [];
+      } catch (error) {
+        if (error instanceof ProviderError && error.status === 404) return [];
+        throw error;
+      }
+    },
+    async markAsTemplate(token, fullName) {
+      await fetchJson(fetchImpl, {
+        provider: ID,
+        url: `${API}/repos/${fullName}`,
+        method: 'PATCH',
+        headers: headers(token),
+        body: { is_template: true },
+      });
     },
     async listProposals(token, fullName, base) {
       const pulls = await fetchJson<
@@ -143,6 +207,66 @@ export function githubCodeHost(fetchImpl: Fetch): CodeHost & Connectable {
         if (error instanceof ProviderError && error.status === 404) return null;
         throw error;
       }
+    },
+    async proposeFiles(token, fullName, input) {
+      const base = await fetchJson<{ object: { sha: string } }>(fetchImpl, {
+        provider: ID,
+        url: `${API}/repos/${fullName}/git/ref/heads/${encodeURIComponent(input.base)}`,
+        headers: headers(token),
+      });
+      try {
+        await fetchJson(fetchImpl, {
+          provider: ID,
+          url: `${API}/repos/${fullName}/git/refs`,
+          method: 'POST',
+          headers: headers(token),
+          body: { ref: `refs/heads/${input.branch}`, sha: base.object.sha },
+        });
+      } catch (error) {
+        // The branch exists from an earlier proposal: its files are updated in place.
+        if (!(error instanceof ProviderError && error.status === 422)) throw error;
+      }
+      for (const [path, content] of Object.entries(input.files)) {
+        let sha: string | undefined;
+        try {
+          sha = (
+            await fetchJson<{ sha: string }>(fetchImpl, {
+              provider: ID,
+              url: `${API}/repos/${fullName}/contents/${path}?ref=${encodeURIComponent(input.branch)}`,
+              headers: headers(token),
+            })
+          ).sha;
+        } catch (error) {
+          if (!(error instanceof ProviderError && error.status === 404)) throw error;
+        }
+        await fetchJson(fetchImpl, {
+          provider: ID,
+          url: `${API}/repos/${fullName}/contents/${path}`,
+          method: 'PUT',
+          headers: headers(token),
+          body: {
+            message: `chore: ${path} by Pono`,
+            branch: input.branch,
+            content: Buffer.from(content, 'utf8').toString('base64'),
+            ...(sha ? { sha } : {}),
+          },
+        });
+      }
+      const [owner] = fullName.split('/');
+      const open = await fetchJson<{ number: number; html_url: string }[]>(fetchImpl, {
+        provider: ID,
+        url: `${API}/repos/${fullName}/pulls?state=open&head=${owner}:${encodeURIComponent(input.branch)}`,
+        headers: headers(token),
+      });
+      if (open[0]) return { number: open[0].number, url: open[0].html_url };
+      const pull = await fetchJson<{ number: number; html_url: string }>(fetchImpl, {
+        provider: ID,
+        url: `${API}/repos/${fullName}/pulls`,
+        method: 'POST',
+        headers: headers(token),
+        body: { title: input.title, body: input.body, head: input.branch, base: input.base },
+      });
+      return { number: pull.number, url: pull.html_url };
     },
     async setReleaseStatus(token, fullName, sha, state, description) {
       await fetchJson(fetchImpl, {

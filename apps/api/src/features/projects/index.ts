@@ -123,11 +123,18 @@ export function projectRoutes(deps: ProjectsDeps): Hono<AppEnv> {
     })
     .post('/projects', async (c) => {
       const body = z
-        .object({ repository: z.string().regex(/^[\w.-]+\/[\w.-]+$/) })
+        .object({
+          repository: z.string().regex(/^[\w.-]+\/[\w.-]+$/),
+          // Off: the project is followed, and its pono.yaml is proposed later, on demand.
+          proposeManifest: z.boolean().default(true),
+        })
         .safeParse(await c.req.json().catch(() => null));
       if (!body.success)
         throw new AppError('request.invalid', 400, 'Expected a repository: owner/name.');
-      const id = await importProject(deps, c.var.actor, body.data.repository);
+      const id = await importProject(deps, c.var.actor, body.data.repository, {
+        origin: 'adopted',
+        proposeManifest: body.data.proposeManifest,
+      });
       return c.json({ id }, 201);
     })
     .get('/projects/:id', async (c) => {

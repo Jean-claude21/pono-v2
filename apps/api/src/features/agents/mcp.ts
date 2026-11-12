@@ -6,23 +6,38 @@ import type { Actor, AppEnv } from '../../platform/context.js';
 import { withOrganization } from '../../platform/db.js';
 import { AppError, errorBody } from '../../platform/errors.js';
 import { hashToken } from '../../platform/secrets.js';
-import type { Catalog } from '../catalog/index.js';
+import {
+  catalogFor,
+  createSkill,
+  createTemplate,
+  proposeSharing,
+  skillInput,
+  type Catalog,
+} from '../catalog/index.js';
 import { launchProject, type LaunchDeps } from '../launch/index.js';
-import { refreshProject } from '../projects/application.js';
+import { siteMetrics } from '../analytics/index.js';
+import { checkSecrets, listVariables, requestVariable, variableName } from '../variables/index.js';
+import { activeCredentials } from '../connections/index.js';
+import { LEVEL_GUIDANCE, LEVELS, levelOf, setLevel } from '../identity/index.js';
+import { manifestView, proposeSkills } from '../manifest/index.js';
+import { importProject, refreshProject } from '../projects/application.js';
 import { evaluateReleases, listReleases, requestRollback } from '../releases/index.js';
 import { serversView, sleepServer, syncServers, wakeServer } from '../servers/index.js';
 import { readUsage, usageView, type UsageDeps } from '../usage/index.js';
+import { mcpUnauthorized } from './oauth.js';
 import { recognize, type Candidate } from './recognize.js';
 
 export interface McpDeps extends LaunchDeps, UsageDeps {
   catalog: Catalog;
+  publicUrl: string;
 }
 
 const INSTRUCTIONS = `Pono is the person's workshop: their projects, what their subscriptions cost, a server for each
 project, and releases that obey the rule they chose. When the person says « launch a project with
-Pono » call launch_project (suggest a template from list_templates first). When they say « let's
+Pono », call get_profile and follow its guidance, then launch_project (suggest a template from list_templates first). When they say « let's
 continue X », or « continue this project » inside a folder, call find_project with the name, or with
-the folder's git remote as repository, then resume_project. If find_project answers ambiguous, ask
+the folder's git remote as repository, then resume_project. A repository Pono does not know yet, in any
+technology, joins with adopt_project. If find_project answers ambiguous, ask
 the person which one; never guess. Never ask for a key in the conversation: keys are set in the
 console. You never validate a release nor roll back: you propose, a person decides.`;
 
@@ -40,6 +55,17 @@ async function guard(work: () => Promise<unknown>): Promise<Text> {
       return { ...json(errorBody(error.code, error.message, error.detail)), isError: true };
     throw error;
   }
+}
+
+async function codeHostOf(deps: McpDeps, actor: Actor) {
+  const creds = await withOrganization(deps.pool, actor.organizationId, (client) =>
+    activeCredentials(client, deps.sealer, 'code_host'),
+  );
+  for (const host of deps.adapters.codeHosts) {
+    const credential = creds.find((c) => c.provider === host.id)?.credential;
+    if (credential) return { host, credential };
+  }
+  throw new AppError('connection.code_host_missing', 409, 'Connect your code host first.');
 }
 
 async function candidates(deps: McpDeps, actor: Actor): Promise<Candidate[]> {
@@ -90,6 +116,35 @@ function buildServer(deps: McpDeps, actor: Actor, scope: 'read' | 'act'): McpSer
         );
 
   server.registerTool(
+    'get_profile',
+    {
+      description:
+        'How much the person wants to decide, and how to talk to them. Call it first in a conversation about a new project.',
+      annotations: read,
+    },
+    async () =>
+      guard(async () => {
+        const level = await levelOf(deps.pool, actor.personId);
+        return { login: actor.login, level, guidance: LEVEL_GUIDANCE[level ?? 'unknown'] };
+      }),
+  );
+
+  server.registerTool(
+    'set_level',
+    {
+      description:
+        'Saves how much the person wants to decide, as they said it: guided (do it all for me), choosing (a few options), expert (my own technology).',
+      inputSchema: { level: z.enum(LEVELS) },
+      annotations: act,
+    },
+    async ({ level }) =>
+      acting(async () => {
+        await setLevel(deps.pool, actor.personId, level);
+        return { level, guidance: LEVEL_GUIDANCE[level] };
+      }),
+  );
+
+  server.registerTool(
     'list_projects',
     { description: "The workshop's projects with their state.", annotations: read },
     async () =>
@@ -128,13 +183,186 @@ function buildServer(deps: McpDeps, actor: Actor, scope: 'read' | 'act'): McpSer
       annotations: read,
     },
     async ({ projectId }) =>
-      guard(async () => ({
-        project: await projectStatus(deps, actor, projectId),
-        skills: deps.catalog.skills
-          .filter((s) => ['pono-basics', 'safe-migrations', 'no-secrets'].includes(s.name))
-          .map((s) => ({ name: s.name, description: s.description })),
-        next: 'Read pono-basics with get_skill before changing code. If the server sleeps, call wake_server.',
-      })),
+      guard(async () => {
+        const project = await projectStatus(deps, actor, projectId);
+        const manifest = await manifestView(deps, actor, projectId);
+        const active = manifest.skills.filter((s) => s.active);
+        const known = (await catalog()).skills;
+        return {
+          project,
+          manifest: {
+            status: manifest.status,
+            problems: manifest.problems,
+            proposalUrl: manifest.proposalUrl,
+            local: manifest.manifest?.skills?.local ?? null,
+          },
+          skills: active.map((s) => ({
+            name: s.name,
+            family: s.family,
+            description: known.find((c) => c.name === s.name)?.description ?? '',
+          })),
+          next: [
+            'Read each active skill with get_skill before changing code; the repository’s own conventions (CLAUDE.md, AGENTS.md, the local skills folder) come first.',
+            manifest.status === 'proposed'
+              ? 'pono.yaml is proposed in a pull request: tell the person to complete and merge it.'
+              : manifest.status === 'invalid'
+                ? 'pono.yaml does not read: fix the problems listed, in a proposal.'
+                : null,
+            'If the server sleeps, call wake_server.',
+          ].filter(Boolean),
+        };
+      }),
+  );
+
+  server.registerTool(
+    'create_skill',
+    {
+      description:
+        "Keeps a way of doing as a skill of the organization (private; family opinion or design). Write it in the person's words; it is read by every agent of the organization.",
+      inputSchema: {
+        name: z.string(),
+        family: z.enum(['opinion', 'design']),
+        description: z.string(),
+        body: z.string(),
+      },
+      annotations: act,
+    },
+    async (input) =>
+      acting(async () => {
+        const parsed = skillInput.safeParse(input);
+        if (!parsed.success)
+          throw new AppError(
+            'request.invalid',
+            400,
+            'A name in kebab-case, a description, a body.',
+          );
+        return createSkill(deps, actor, parsed.data);
+      }),
+  );
+
+  server.registerTool(
+    'save_as_template',
+    {
+      description:
+        "Makes a project the organization's own template: its repository becomes the starter new projects are generated from, with its skills. Private until the person asks to share it.",
+      inputSchema: {
+        projectId: z.string(),
+        id: z.string(),
+        category: z.enum(['free', 'services', 'commerce', 'software', 'presence']).default('free'),
+        name: z.string().min(1).max(120),
+        description: z.string().min(1).max(300),
+        stack: z.array(z.string()).default([]),
+      },
+      annotations: act,
+    },
+    async (input) =>
+      acting(async () => {
+        const project = await projectStatus(deps, actor, input.projectId);
+        const manifest = await manifestView(deps, actor, input.projectId);
+        const skills = manifest.skills.filter((s) => s.active).map((s) => s.name);
+        const { host, credential } = await codeHostOf(deps, actor);
+        await host.markAsTemplate(credential, String(project.repository));
+        return createTemplate(deps, actor, {
+          id: input.id,
+          category: input.category,
+          name: { fr: input.name, en: input.name },
+          description: { fr: input.description, en: input.description },
+          stack: input.stack,
+          skills,
+          starter: String(project.repository),
+        });
+      }),
+  );
+
+  server.registerTool(
+    'share_with_everyone',
+    {
+      description:
+        "Asks Pono's operator to share a private template or skill with everyone. Nothing is shared until they approve it.",
+      inputSchema: { kind: z.enum(['template', 'skill']), name: z.string() },
+      annotations: act,
+    },
+    async ({ kind, name }) =>
+      acting(async () => {
+        await proposeSharing(deps, actor, kind, name);
+        return { proposed: true, kind, name };
+      }),
+  );
+
+  server.registerTool(
+    'list_variables',
+    {
+      description:
+        "A project's development variables, by name, and whether each is set. Values are never shown: they reach the project's server only.",
+      inputSchema: { projectId: z.string() },
+      annotations: read,
+    },
+    async ({ projectId }) => guard(() => listVariables(deps, actor, projectId)),
+  );
+
+  server.registerTool(
+    'request_variable',
+    {
+      description:
+        'Asks the person for a development variable the project needs (a name in CAPITALS and why). They set the value in the console; never ask for a value in the conversation.',
+      inputSchema: { projectId: z.string(), name: z.string(), reason: z.string().max(280) },
+      annotations: act,
+    },
+    async ({ projectId, name, reason }) =>
+      acting(async () => {
+        const parsed = variableName.safeParse(name);
+        if (!parsed.success)
+          throw new AppError(
+            'variable.invalid_name',
+            400,
+            'A name in CAPITALS, not starting with PONO_.',
+          );
+        return requestVariable(deps, actor, projectId, parsed.data, reason);
+      }),
+  );
+
+  server.registerTool(
+    'check_secrets',
+    {
+      description:
+        'Checks files for secrets before you commit them: the same rules as the release guard. Call it on every batch of files you are about to commit; fix every finding first.',
+      inputSchema: {
+        files: z.array(z.object({ path: z.string(), content: z.string().max(500_000) })).max(200),
+      },
+      annotations: read,
+    },
+    async ({ files }) => guard(async () => checkSecrets(files)),
+  );
+
+  server.registerTool(
+    'adopt_project',
+    {
+      description:
+        'Puts an existing repository under Pono, whatever its technology: the project joins the workshop and Pono proposes its pono.yaml in a pull request, pre-filled. Use with the git remote of the current folder.',
+      inputSchema: { repository: z.string().regex(/^[\w.-]+\/[\w.-]+$/) },
+      annotations: act,
+    },
+    async ({ repository }) =>
+      acting(async () => {
+        const projectId = await importProject(deps, actor, repository);
+        return { projectId, manifest: await manifestView(deps, actor, projectId) };
+      }),
+  );
+
+  server.registerTool(
+    'set_skills',
+    {
+      description:
+        'Turns skills on or off for a project. Pono proposes the change of pono.yaml in a pull request; the person merges it.',
+      inputSchema: {
+        projectId: z.string(),
+        use: z.array(z.string()).default([]),
+        off: z.array(z.string()).default([]),
+      },
+      annotations: act,
+    },
+    async ({ projectId, use, off }) =>
+      acting(() => proposeSkills(deps, actor, projectId, { use, off })),
   );
 
   server.registerTool(
@@ -147,16 +375,38 @@ function buildServer(deps: McpDeps, actor: Actor, scope: 'read' | 'act'): McpSer
     async () => guard(() => withOrganization(deps.pool, actor.organizationId, usageView)),
   );
 
+  const catalog = () => catalogFor(deps.pool, deps.catalog, actor.organizationId);
+
+  server.registerTool(
+    'read_site_metrics',
+    {
+      description:
+        "A project's visits over the last days (pageviews, visitors, top pages and sources), measured at its analytics provider, or why they are unavailable.",
+      inputSchema: { projectId: z.string(), days: z.number().int().min(1).max(90).default(30) },
+      annotations: read,
+    },
+    async ({ projectId, days }) =>
+      guard(() =>
+        siteMetrics({ ...deps, analytics: deps.analytics ?? [] }, actor, projectId, days),
+      ),
+  );
+
   server.registerTool(
     'list_templates',
-    { description: 'The templates a project can start from.', annotations: read },
+    {
+      description:
+        "The templates a project can start from: Pono's, the operator's, the shared ones and the organization's own.",
+      annotations: read,
+    },
     async () =>
       guard(async () =>
-        deps.catalog.templates.map((t) => ({
+        (await catalog()).templates.map((t) => ({
           id: t.id,
           name: t.name,
           description: t.description,
+          stack: t.stack,
           skills: t.skills,
+          scope: t.scope,
         })),
       ),
   );
@@ -170,7 +420,7 @@ function buildServer(deps: McpDeps, actor: Actor, scope: 'read' | 'act'): McpSer
     },
     async ({ name }) =>
       guard(async () => {
-        const skill = deps.catalog.skills.find((s) => s.name === name);
+        const skill = (await catalog()).skills.find((s) => s.name === name);
         if (!skill) throw new AppError('skill.not_found', 404, 'No such skill.');
         return skill;
       }),
@@ -305,10 +555,7 @@ function buildServer(deps: McpDeps, actor: Actor, scope: 'read' | 'act'): McpSer
 export function mcpHandler(deps: McpDeps) {
   return async (c: Context<AppEnv>): Promise<Response> => {
     const bearer = c.req.header('authorization')?.match(/^Bearer pono_(\S+)$/)?.[1];
-    if (!bearer)
-      return c.json(errorBody('auth.required', 'An agent token is required.'), 401, {
-        'www-authenticate': 'Bearer',
-      });
+    if (!bearer) return mcpUnauthorized(deps.publicUrl);
     const { rows } = await deps.pool.query<{
       id: string;
       organization_id: string;
@@ -318,7 +565,7 @@ export function mcpHandler(deps: McpDeps) {
       login: string;
     }>('SELECT * FROM agent_by_token($1)', [hashToken(bearer)]);
     const agent = rows[0];
-    if (!agent) return c.json(errorBody('auth.required', 'This agent token is not valid.'), 401);
+    if (!agent) return mcpUnauthorized(deps.publicUrl);
     const actor: Actor = {
       personId: agent.person_id,
       login: agent.login,
