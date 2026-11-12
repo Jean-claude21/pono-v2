@@ -8,6 +8,7 @@ import {
   type IdentityProvider,
 } from './features/identity/index.js';
 import { projectRoutes, type WorkshopAdapters } from './features/projects/index.js';
+import { usageRoutes, type InternalUsage, type UsageSource } from './features/usage/index.js';
 import type { AppEnv } from './platform/context.js';
 import { ping, type Pool } from './platform/db.js';
 import { AppError, errorBody } from './platform/errors.js';
@@ -21,6 +22,8 @@ export interface AppDeps {
   identity: IdentityProvider[];
   connectable: Connectable[];
   adapters: WorkshopAdapters;
+  usageSources: UsageSource[];
+  internalUsage?: InternalUsage[];
   now: () => Date;
 }
 
@@ -35,6 +38,7 @@ export function createApp(deps: AppDeps): Hono<AppEnv> {
   v1.route('/me', meRoutes(deps));
   v1.route('/connections', connectionRoutes(deps));
   v1.route('/', projectRoutes(deps));
+  v1.route('/', usageRoutes(deps));
   app.route('/v1', v1);
 
   app.notFound((c) => c.json(errorBody('route.not_found', 'No such route.'), 404));

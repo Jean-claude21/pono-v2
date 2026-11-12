@@ -5,7 +5,8 @@ import * as m from '@/paraglide/messages.js';
 import { LocaleSwitch } from './LocaleSwitch';
 import { SignIn } from './SignIn';
 
-type Section = 'projects' | 'connections';
+export type Section =
+  'projects' | 'usage' | 'servers' | 'catalog' | 'connections' | 'agents' | 'settings';
 
 interface Item {
   label: string;
@@ -58,9 +59,9 @@ export function Shell({ section, children }: Readonly<{ section: Section; childr
           <Nav
             items={[
               { label: m.rail_projects(), href: '/', current: section === 'projects' },
-              { label: m.rail_usage() },
-              { label: m.rail_servers() },
-              { label: m.rail_catalog() },
+              { label: m.rail_usage(), href: '/usage', current: section === 'usage' },
+              { label: m.rail_servers(), href: '/servers', current: section === 'servers' },
+              { label: m.rail_catalog(), href: '/catalog', current: section === 'catalog' },
             ]}
           />
         </div>
@@ -75,8 +76,8 @@ export function Shell({ section, children }: Readonly<{ section: Section; childr
                 href: '/connections',
                 current: section === 'connections',
               },
-              { label: m.rail_agents() },
-              { label: m.rail_settings() },
+              { label: m.rail_agents(), href: '/agents', current: section === 'agents' },
+              { label: m.rail_settings(), href: '/settings', current: section === 'settings' },
             ]}
           />
         </div>

@@ -12,6 +12,7 @@ import type {
   LinkChecker,
   Repository,
 } from '../../src/features/projects/index.js';
+import type { Reading, UsageSource } from '../../src/features/usage/index.js';
 import { createPool, type Pool } from '../../src/platform/db.js';
 import { ProviderError } from '../../src/platform/http.js';
 import { Sealer } from '../../src/platform/secrets.js';
@@ -32,7 +33,19 @@ export function fakeConnectable(id: string, kind: Connectable['kind']): Connecta
   };
 }
 
+/** Usage in memory: what `world.usage` holds, or a refusal when it is null. */
+export function fakeUsage(w: World): UsageSource {
+  return {
+    id: 'host',
+    async read() {
+      if (w.usage === null) throw new ProviderError('host', 403, 'Answered 403');
+      return w.usage;
+    },
+  };
+}
+
 export interface World {
+  usage: Reading[] | null;
   repositories: Repository[];
   sites: Map<string, HostedSite & { repository: string }>;
   deployments: Map<string, Deployment[]>;
@@ -44,6 +57,7 @@ export interface World {
 
 export function world(): World {
   return {
+    usage: [],
     repositories: [],
     sites: new Map(),
     deployments: new Map(),
@@ -112,6 +126,7 @@ export function testApp(): TestApp {
       fakeConnectable('db', 'database'),
     ],
     adapters: fakeAdapters(w),
+    usageSources: [fakeUsage(w)],
     now: () => now.value,
   });
   return { app, pool, world: w, now };

@@ -1,4 +1,4 @@
-export type ConnectionKind = 'code_host' | 'hosting' | 'database';
+export type ConnectionKind = 'code_host' | 'hosting' | 'database' | 'ai';
 
 /** A provider a person connects with a key (US2). The id is an opaque adapter id. */
 export interface Connectable {

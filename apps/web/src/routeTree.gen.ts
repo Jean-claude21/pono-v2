@@ -13,6 +13,7 @@ import { Route as IndexRouteImport } from './routes/index'
 import { Route as ConnectionsRouteImport } from './routes/connections'
 import { Route as HealthRouteImport } from './routes/health'
 import { Route as ImportRouteImport } from './routes/import'
+import { Route as UsageRouteImport } from './routes/usage'
 import { Route as ProjectsProjectIdRouteImport } from './routes/projects.$projectId'
 
 const IndexRoute = IndexRouteImport.update({
@@ -35,6 +36,11 @@ const ImportRoute = ImportRouteImport.update({
   path: '/import',
   getParentRoute: () => rootRouteImport,
 } as any)
+const UsageRoute = UsageRouteImport.update({
+  id: '/usage',
+  path: '/usage',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ProjectsProjectIdRoute = ProjectsProjectIdRouteImport.update({
   id: '/projects/$projectId',
   path: '/projects/$projectId',
@@ -46,6 +52,7 @@ export interface FileRoutesByFullPath {
   '/connections': typeof ConnectionsRoute
   '/health': typeof HealthRoute
   '/import': typeof ImportRoute
+  '/usage': typeof UsageRoute
   '/projects/$projectId': typeof ProjectsProjectIdRoute
 }
 export interface FileRoutesByTo {
@@ -53,6 +60,7 @@ export interface FileRoutesByTo {
   '/connections': typeof ConnectionsRoute
   '/health': typeof HealthRoute
   '/import': typeof ImportRoute
+  '/usage': typeof UsageRoute
   '/projects/$projectId': typeof ProjectsProjectIdRoute
 }
 export interface FileRoutesById {
@@ -61,20 +69,33 @@ export interface FileRoutesById {
   '/connections': typeof ConnectionsRoute
   '/health': typeof HealthRoute
   '/import': typeof ImportRoute
+  '/usage': typeof UsageRoute
   '/projects/$projectId': typeof ProjectsProjectIdRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
-    '/' | '/connections' | '/health' | '/import' | '/projects/$projectId'
+    | '/'
+    | '/connections'
+    | '/health'
+    | '/import'
+    | '/usage'
+    | '/projects/$projectId'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/connections' | '/health' | '/import' | '/projects/$projectId'
+  to:
+    | '/'
+    | '/connections'
+    | '/health'
+    | '/import'
+    | '/usage'
+    | '/projects/$projectId'
   id:
     | '__root__'
     | '/'
     | '/connections'
     | '/health'
     | '/import'
+    | '/usage'
     | '/projects/$projectId'
   fileRoutesById: FileRoutesById
 }
@@ -83,6 +104,7 @@ export interface RootRouteChildren {
   ConnectionsRoute: typeof ConnectionsRoute
   HealthRoute: typeof HealthRoute
   ImportRoute: typeof ImportRoute
+  UsageRoute: typeof UsageRoute
   ProjectsProjectIdRoute: typeof ProjectsProjectIdRoute
 }
 
@@ -116,6 +138,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ImportRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/usage': {
+      id: '/usage'
+      path: '/usage'
+      fullPath: '/usage'
+      preLoaderRoute: typeof UsageRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/projects/$projectId': {
       id: '/projects/$projectId'
       path: '/projects/$projectId'
@@ -131,6 +160,7 @@ const rootRouteChildren: RootRouteChildren = {
   ConnectionsRoute: ConnectionsRoute,
   HealthRoute: HealthRoute,
   ImportRoute: ImportRoute,
+  UsageRoute: UsageRoute,
   ProjectsProjectIdRoute: ProjectsProjectIdRoute,
 }
 export const routeTree = rootRouteImport

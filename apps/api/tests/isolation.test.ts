@@ -10,6 +10,9 @@ import {
 // 001 SC-002, 002 SC-003: no row of an organization is readable from another, on every table of
 // an organization.
 const ORGANIZATION_TABLES = [
+  'subscriptions',
+  'usage_readings',
+  'alerts',
   'organizations',
   'members',
   'connections',
@@ -57,6 +60,18 @@ async function fill(org: string): Promise<void> {
       `INSERT INTO deployments (organization_id, project_id, environment, external_id, status, created_at)
        VALUES ($1, $2, 'production', 'd1', 'succeeded', now())`,
       [org, project],
+    );
+    await client.query(
+      `INSERT INTO subscriptions (organization_id, service, price_micros, cycle, created_by) VALUES ($1, 's', 1, 'month', $2)`,
+      [org, randomUUID()],
+    );
+    await client.query(
+      `INSERT INTO usage_readings (organization_id, provider, meter, used, unit, source) VALUES ($1, 'p', 'm', 1, 'u', 'measured')`,
+      [org],
+    );
+    await client.query(
+      `INSERT INTO alerts (organization_id, key, kind, level) VALUES ($1, 'k', 'quota', 'warn')`,
+      [org],
     );
     await client.query(
       `INSERT INTO journal (organization_id, project_id, action, channel) VALUES ($1, $2, 'test', 'system')`,

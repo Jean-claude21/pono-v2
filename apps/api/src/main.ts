@@ -6,6 +6,13 @@ import { githubCodeHost } from './infrastructure/providers/github.js';
 import { httpLinkChecker } from './infrastructure/providers/links.js';
 import { netlifyHosting } from './infrastructure/providers/netlify.js';
 import { neonDatabase } from './infrastructure/providers/neon.js';
+import {
+  cloudflareUsage,
+  githubUsage,
+  netlifyUsage,
+  neonUsage,
+  openaiUsage,
+} from './infrastructure/providers/usage.js';
 import { loadConfig } from './platform/config.js';
 import { createPool } from './platform/db.js';
 import { Sealer } from './platform/secrets.js';
@@ -28,6 +35,7 @@ const github = githubCodeHost(fetch);
 const netlify = netlifyHosting(fetch);
 const cloudflare = cloudflareHosting(fetch);
 const neon = neonDatabase(fetch);
+const openai = openaiUsage(fetch);
 
 const app = createApp({
   pool: createPool(config.PONO_DATABASE_URL),
@@ -35,7 +43,14 @@ const app = createApp({
   publicUrl: config.PONO_PUBLIC_URL,
   secureCookies: config.NODE_ENV === 'production',
   identity,
-  connectable: [github, netlify, cloudflare, neon],
+  connectable: [github, netlify, cloudflare, neon, openai],
+  usageSources: [
+    githubUsage(fetch),
+    netlifyUsage(fetch),
+    cloudflareUsage(fetch),
+    neonUsage(fetch),
+    openai,
+  ],
   adapters: {
     codeHosts: [github],
     hostings: [netlify, cloudflare],

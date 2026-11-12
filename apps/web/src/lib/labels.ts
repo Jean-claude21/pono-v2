@@ -34,14 +34,36 @@ const tables: Record<string, Record<string, () => string>> = {
     'connection.revoked': m.action_connection_revoked,
     'project.imported': m.action_project_imported,
     'project.refreshed': m.action_project_refreshed,
+    'usage.read': m.action_usage_read,
+    'subscription.declared': m.action_subscription_declared,
+    'subscription.ended': m.action_subscription_ended,
   },
   channel: { console: m.channel_console, mcp: m.channel_mcp, system: m.channel_system },
   kind: {
     code_host: m.connections_kind_code_host,
     hosting: m.connections_kind_hosting,
     database: m.connections_kind_database,
+    ai: m.connections_kind_ai,
   },
   field: { token: m.field_token, accountId: m.field_accountId },
+  source: {
+    measured: m.source_measured,
+    estimated: m.source_estimated,
+    declared: m.source_declared,
+    unavailable: m.source_unavailable,
+  },
+  unavailableReason: { permission: m.reason_permission, no_answer: m.reason_no_answer },
+  meter: {
+    'hosting.bandwidth': m.meter_hosting_bandwidth,
+    'hosting.requests': m.meter_hosting_requests,
+    'database.storage': m.meter_database_storage,
+    'database.compute': m.meter_database_compute,
+    'database.transfer': m.meter_database_transfer,
+    'code.actions_minutes': m.meter_code_actions_minutes,
+    'ai.cost_30d': m.meter_ai_cost_30d,
+    'servers.compute': m.meter_servers_compute,
+    account: m.meter_account,
+  },
   error: {
     'connection.rejected': m.error_connection_rejected,
     'connection.unreachable': m.error_connection_unreachable,
@@ -81,4 +103,16 @@ export function ago(iso: string | null | undefined, now: Date = new Date()): str
     if (Math.abs(seconds) >= size) return format.format(Math.round(seconds / size), unit);
   }
   return format.format(Math.round(seconds), 'second');
+}
+
+/** Micro-dollars as money in the person's language. */
+export function money(micros: number): string {
+  return new Intl.NumberFormat(getLocale(), { style: 'currency', currency: 'USD' }).format(
+    micros / 1_000_000,
+  );
+}
+
+/** A number in the person's language. */
+export function figure(value: number): string {
+  return new Intl.NumberFormat(getLocale(), { maximumFractionDigits: 2 }).format(value);
 }
