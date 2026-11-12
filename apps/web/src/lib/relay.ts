@@ -1,11 +1,12 @@
 /**
- * The console is the browser's only origin: `/auth/*` and `/v1/*` go to the API as they are, so the
+ * The console is the browser's and the agents' only origin: `/auth/*`, `/v1/*` and `/mcp` go to the API
+ * as they are, so the
  * session cookie is the console's own (SameSite=Lax, HttpOnly).
  */
 const API_URL = process.env.PONO_API_URL ?? 'http://localhost:8787';
 
 export function isApiPath(pathname: string): boolean {
-  return pathname.startsWith('/auth/') || pathname.startsWith('/v1/');
+  return pathname.startsWith('/auth/') || pathname.startsWith('/v1/') || pathname === '/mcp';
 }
 
 export async function relay(request: Request): Promise<Response> {

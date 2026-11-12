@@ -1,4 +1,5 @@
 import { Hono } from 'hono';
+import { agentRoutes, mcpHandler } from './features/agents/index.js';
 import { catalogRoutes, type Catalog } from './features/catalog/index.js';
 import { connectionRoutes, type Connectable } from './features/connections/index.js';
 import { healthRoutes } from './features/health/index.js';
@@ -54,7 +55,9 @@ export function createApp(deps: AppDeps): Hono<AppEnv> {
   v1.route('/', releaseRoutes(deps));
   v1.route('/catalog', catalogRoutes(deps.catalog));
   v1.route('/launch', launchRoutes(deps));
+  v1.route('/agents', agentRoutes(deps));
   app.route('/v1', v1);
+  app.all('/mcp', mcpHandler(deps));
 
   app.notFound((c) => c.json(errorBody('route.not_found', 'No such route.'), 404));
   app.onError((error, c) => {

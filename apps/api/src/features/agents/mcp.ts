@@ -1,0 +1,337 @@
+import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
+import { WebStandardStreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/webStandardStreamableHttp.js';
+import type { Context } from 'hono';
+import { z } from 'zod';
+import type { Actor, AppEnv } from '../../platform/context.js';
+import { withOrganization } from '../../platform/db.js';
+import { AppError, errorBody } from '../../platform/errors.js';
+import { hashToken } from '../../platform/secrets.js';
+import type { Catalog } from '../catalog/index.js';
+import { launchProject, type LaunchDeps } from '../launch/index.js';
+import { refreshProject } from '../projects/application.js';
+import { evaluateReleases, listReleases, requestRollback } from '../releases/index.js';
+import { serversView, sleepServer, syncServers, wakeServer } from '../servers/index.js';
+import { readUsage, usageView, type UsageDeps } from '../usage/index.js';
+import { recognize, type Candidate } from './recognize.js';
+
+export interface McpDeps extends LaunchDeps, UsageDeps {
+  catalog: Catalog;
+}
+
+const INSTRUCTIONS = `Pono is the person's workshop: their projects, what their subscriptions cost, a server for each
+project, and releases that obey the rule they chose. When the person says « launch a project with
+Pono » call launch_project (suggest a template from list_templates first). When they say « let's
+continue X », or « continue this project » inside a folder, call find_project with the name, or with
+the folder's git remote as repository, then resume_project. If find_project answers ambiguous, ask
+the person which one; never guess. Never ask for a key in the conversation: keys are set in the
+console. You never validate a release nor roll back: you propose, a person decides.`;
+
+type Text = { content: { type: 'text'; text: string }[]; isError?: boolean };
+
+function json(value: unknown): Text {
+  return { content: [{ type: 'text', text: JSON.stringify(value, null, 2) }] };
+}
+
+async function guard(work: () => Promise<unknown>): Promise<Text> {
+  try {
+    return json(await work());
+  } catch (error) {
+    if (error instanceof AppError)
+      return { ...json(errorBody(error.code, error.message, error.detail)), isError: true };
+    throw error;
+  }
+}
+
+async function candidates(deps: McpDeps, actor: Actor): Promise<Candidate[]> {
+  return withOrganization(deps.pool, actor.organizationId, async (client) => {
+    const { rows } = await client.query<{
+      id: string;
+      name: string;
+      repository: string;
+      last: Date | null;
+    }>(
+      'SELECT id, name, repository, greatest(last_commit_at, refreshed_at) AS last FROM projects ORDER BY name',
+    );
+    return rows.map((r) => ({
+      id: r.id,
+      name: r.name,
+      repository: r.repository,
+      lastActivity: r.last,
+    }));
+  });
+}
+
+async function projectStatus(deps: McpDeps, actor: Actor, projectId: string) {
+  return withOrganization(deps.pool, actor.organizationId, async (client) => {
+    const { rows } = await client.query(
+      `SELECT p.id, p.name, p.repository, p.default_branch, p.state, p.state_reason, p.production_url, p.link_status,
+         p.hosting_provider, p.hosting_status, p.database_provider, p.database_status, p.release_mode, p.release_mode_until,
+         s.id AS server_id, s.status AS server_status, s.url AS server_url, s.agent AS server_agent
+       FROM projects p LEFT JOIN project_servers s ON s.project_id = p.id AND s.status <> 'released' WHERE p.id = $1`,
+      [projectId],
+    );
+    if (!rows[0]) throw new AppError('project.not_found', 404, 'No such project.');
+    return rows[0];
+  });
+}
+
+/** One MCP server per request, bound to the agent's token: the same rights as its person (principle 5). */
+function buildServer(deps: McpDeps, actor: Actor, scope: 'read' | 'act'): McpServer {
+  const server = new McpServer({ name: 'pono', version: '1.0.0' }, { instructions: INSTRUCTIONS });
+  const read = { readOnlyHint: true, openWorldHint: false } as const;
+  const act = { readOnlyHint: false, destructiveHint: false, openWorldHint: true } as const;
+  const acting = (work: () => Promise<unknown>) =>
+    scope === 'act'
+      ? guard(work)
+      : guard(async () =>
+          Promise.reject(
+            new AppError('agent.scope_insufficient', 403, 'This agent may only read.'),
+          ),
+        );
+
+  server.registerTool(
+    'list_projects',
+    { description: "The workshop's projects with their state.", annotations: read },
+    async () =>
+      guard(() =>
+        withOrganization(
+          deps.pool,
+          actor.organizationId,
+          async (client) =>
+            (
+              await client.query(
+                'SELECT id, name, repository, state, state_reason, production_url, link_status FROM projects ORDER BY name',
+              )
+            ).rows,
+        ),
+      ),
+  );
+
+  server.registerTool(
+    'find_project',
+    {
+      description:
+        'Recognizes the project a conversation means, by a name the person said or the git remote of the current folder.',
+      inputSchema: { query: z.string().optional(), repository: z.string().optional() },
+      annotations: read,
+    },
+    async ({ query, repository }) =>
+      guard(async () => recognize(await candidates(deps, actor), { query, repository })),
+  );
+
+  server.registerTool(
+    'resume_project',
+    {
+      description:
+        'Everything to continue a project: its state, its server, its release mode, the skills to follow.',
+      inputSchema: { projectId: z.string() },
+      annotations: read,
+    },
+    async ({ projectId }) =>
+      guard(async () => ({
+        project: await projectStatus(deps, actor, projectId),
+        skills: deps.catalog.skills
+          .filter((s) => ['pono-basics', 'safe-migrations', 'no-secrets'].includes(s.name))
+          .map((s) => ({ name: s.name, description: s.description })),
+        next: 'Read pono-basics with get_skill before changing code. If the server sleeps, call wake_server.',
+      })),
+  );
+
+  server.registerTool(
+    'read_usage',
+    {
+      description:
+        'What the subscriptions cost this month, every figure with its source, and the open alerts.',
+      annotations: read,
+    },
+    async () => guard(() => withOrganization(deps.pool, actor.organizationId, usageView)),
+  );
+
+  server.registerTool(
+    'list_templates',
+    { description: 'The templates a project can start from.', annotations: read },
+    async () =>
+      guard(async () =>
+        deps.catalog.templates.map((t) => ({
+          id: t.id,
+          name: t.name,
+          description: t.description,
+          skills: t.skills,
+        })),
+      ),
+  );
+
+  server.registerTool(
+    'get_skill',
+    {
+      description: 'A skill Pono serves: how to do a thing right on a Pono project.',
+      inputSchema: { name: z.string() },
+      annotations: read,
+    },
+    async ({ name }) =>
+      guard(async () => {
+        const skill = deps.catalog.skills.find((s) => s.name === name);
+        if (!skill) throw new AppError('skill.not_found', 404, 'No such skill.');
+        return skill;
+      }),
+  );
+
+  server.registerTool(
+    'list_servers',
+    {
+      description: 'The project servers, and how many the plan lets run at once.',
+      annotations: read,
+    },
+    async () =>
+      guard(async () => {
+        await syncServers(deps, actor.organizationId);
+        return withOrganization(deps.pool, actor.organizationId, serversView);
+      }),
+  );
+
+  server.registerTool(
+    'list_releases',
+    {
+      description: "A project's proposals and their verdicts.",
+      inputSchema: { projectId: z.string() },
+      annotations: read,
+    },
+    async ({ projectId }) => guard(() => listReleases(deps, actor, projectId)),
+  );
+
+  server.registerTool(
+    'launch_project',
+    {
+      description:
+        'Launches a project: a repository in the person’s account, its manifest, and its server with the template’s skills. When the plan is full, the answer names the servers: ask which one to put to sleep, then call again with sleepServerId.',
+      inputSchema: {
+        template: z.string(),
+        name: z.string().regex(/^[a-z0-9][a-z0-9-]{1,38}$/),
+        agent: z.enum(['claude-code', 'codex', 'opencode', 'none']).default('claude-code'),
+        private: z.boolean().default(true),
+        sleepServerId: z.string().optional(),
+      },
+      annotations: act,
+    },
+    async (input) =>
+      acting(() =>
+        launchProject(deps, actor, {
+          template: input.template,
+          name: input.name,
+          agent: input.agent,
+          private: input.private,
+          ...(input.sleepServerId ? { sleepServerId: input.sleepServerId } : {}),
+        }),
+      ),
+  );
+
+  server.registerTool(
+    'wake_server',
+    {
+      description: "Wakes a project's server (it counts against the plan while awake).",
+      inputSchema: { serverId: z.string(), sleepServerId: z.string().optional() },
+      annotations: act,
+    },
+    async ({ serverId, sleepServerId }) =>
+      acting(async () => {
+        await wakeServer(deps, actor, serverId, sleepServerId);
+        return { woken: serverId };
+      }),
+  );
+
+  server.registerTool(
+    'sleep_server',
+    {
+      description: "Puts a project's server to sleep; its files stay.",
+      inputSchema: { serverId: z.string() },
+      annotations: act,
+    },
+    async ({ serverId }) =>
+      acting(async () => {
+        await sleepServer(deps, actor, serverId);
+        return { slept: serverId };
+      }),
+  );
+
+  server.registerTool(
+    'refresh_project',
+    {
+      description: "Reads a project's state again at its providers.",
+      inputSchema: { projectId: z.string() },
+      annotations: act,
+    },
+    async ({ projectId }) =>
+      acting(async () => {
+        await refreshProject(deps, actor, projectId);
+        return projectStatus(deps, actor, projectId);
+      }),
+  );
+
+  server.registerTool(
+    'refresh_usage',
+    { description: 'Reads what every connected provider consumed.', annotations: act },
+    async () => acting(async () => ({ readings: await readUsage(deps, actor) })),
+  );
+
+  server.registerTool(
+    'propose_release',
+    {
+      description:
+        "Evaluates a project's open proposals; what ships next follows the project's mode, chosen by the person.",
+      inputSchema: { projectId: z.string() },
+      annotations: act,
+    },
+    async ({ projectId }) => acting(() => evaluateReleases(deps, actor, projectId)),
+  );
+
+  server.registerTool(
+    'request_rollback',
+    {
+      description: 'Asks the person to roll production back; they decide in the console.',
+      inputSchema: { projectId: z.string(), reason: z.string().max(280) },
+      annotations: act,
+    },
+    async ({ projectId, reason }) =>
+      acting(async () => {
+        await requestRollback(deps, actor, projectId, reason);
+        return { requested: true };
+      }),
+  );
+
+  return server;
+}
+
+/** `/mcp`: Streamable HTTP, stateless, behind the agent's bearer token (D-008). */
+export function mcpHandler(deps: McpDeps) {
+  return async (c: Context<AppEnv>): Promise<Response> => {
+    const bearer = c.req.header('authorization')?.match(/^Bearer pono_(\S+)$/)?.[1];
+    if (!bearer)
+      return c.json(errorBody('auth.required', 'An agent token is required.'), 401, {
+        'www-authenticate': 'Bearer',
+      });
+    const { rows } = await deps.pool.query<{
+      id: string;
+      organization_id: string;
+      person_id: string;
+      name: string;
+      scope: 'read' | 'act';
+      login: string;
+    }>('SELECT * FROM agent_by_token($1)', [hashToken(bearer)]);
+    const agent = rows[0];
+    if (!agent) return c.json(errorBody('auth.required', 'This agent token is not valid.'), 401);
+    const actor: Actor = {
+      personId: agent.person_id,
+      login: agent.login,
+      name: agent.name,
+      organizationId: agent.organization_id,
+      channel: 'mcp',
+    };
+    const server = buildServer(deps, actor, agent.scope);
+    const transport = new WebStandardStreamableHTTPServerTransport({
+      sessionIdGenerator: undefined,
+      enableJsonResponse: true,
+    });
+    await server.connect(transport);
+    return transport.handleRequest(c.req.raw);
+  };
+}
