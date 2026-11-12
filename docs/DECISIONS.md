@@ -200,3 +200,20 @@ faire »).
 
 **Ce que ça coûte.** Une personne sans GitHub fait un pas de plus. **Ce qui la renverserait.** Un
 public qui ne veut pas de code chez lui : un dépôt hébergé par Pono deviendrait alors nécessaire.
+
+---
+
+## D-016 — Le catalogue a trois niveaux, et le partage passe par l'exploitant
+
+**Tranché le 2026-11-12.**
+
+- **Officiel** : les fichiers de Pono, et les templates que l'exploitant importe depuis un dépôt
+  (`pono-template.yaml`, `.pono/skills/`). Le dépôt devient le dépôt de départ.
+- **Privé** : ce qu'une organisation crée, dans la console ou par MCP. Les skills de sûreté restent
+  ceux de Pono ; un nom officiel ne peut pas être repris.
+- **Partagé** : ce que l'exploitant a relu et approuvé. Un skill est une consigne exécutée par les
+  agents des autres : sans relecture, ce serait une porte d'injection.
+- Les skills tiers (Impeccable, Apache-2.0) sont épinglés à une version relue, changée par commit.
+
+**Ce qui la renverserait.** Un volume de propositions qu'une personne ne peut plus relire : il
+faudrait alors des relecteurs de confiance, ou une analyse automatique en premier filtre.

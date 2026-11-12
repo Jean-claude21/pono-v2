@@ -86,6 +86,8 @@ export interface World {
   proposalFiles: Map<string, ChangedFile[]>;
   statuses: { fullName: string; sha: string; state: string }[];
   merged: string[];
+  /** Repositories marked as starters. */
+  templates: Set<string>;
   /** Pull requests Pono opened with files: `fullName` → the last one. */
   opened: Map<string, { branch: string; title: string; files: Record<string, string> }>;
   rollbacks: string[];
@@ -108,6 +110,7 @@ export function world(): World {
     proposalFiles: new Map(),
     statuses: [],
     merged: [],
+    templates: new Set(),
     opened: new Map(),
     rollbacks: [],
     files: new Map(),
@@ -141,8 +144,18 @@ export function fakeAdapters(w: World): AppDeps['adapters'] {
         pushedAt: null,
       };
       w.repositories.push(repository);
-      w.files.set(repository.fullName, input.files);
+      const starter = input.starter ? (w.files.get(input.starter) ?? {}) : {};
+      w.files.set(repository.fullName, { ...starter, ...input.files });
       return repository;
+    },
+    async listDirectory(_c, fullName, path) {
+      const prefix = `${path.replace(/\/$/, '')}/`;
+      return Object.keys(w.files.get(fullName) ?? {})
+        .filter((f) => f.startsWith(prefix) && !f.slice(prefix.length).includes('/'))
+        .map((f) => f.slice(prefix.length));
+    },
+    async markAsTemplate(_c, fullName) {
+      w.templates.add(fullName);
     },
     async listProposals(_c, fullName) {
       return w.proposals.get(fullName) ?? [];

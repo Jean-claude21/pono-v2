@@ -6,8 +6,16 @@ import type { Actor, AppEnv } from '../../platform/context.js';
 import { withOrganization } from '../../platform/db.js';
 import { AppError, errorBody } from '../../platform/errors.js';
 import { hashToken } from '../../platform/secrets.js';
-import type { Catalog } from '../catalog/index.js';
+import {
+  catalogFor,
+  createSkill,
+  createTemplate,
+  proposeSharing,
+  skillInput,
+  type Catalog,
+} from '../catalog/index.js';
 import { launchProject, type LaunchDeps } from '../launch/index.js';
+import { activeCredentials } from '../connections/index.js';
 import { LEVEL_GUIDANCE, LEVELS, levelOf, setLevel } from '../identity/index.js';
 import { manifestView, proposeSkills } from '../manifest/index.js';
 import { importProject, refreshProject } from '../projects/application.js';
@@ -43,6 +51,17 @@ async function guard(work: () => Promise<unknown>): Promise<Text> {
       return { ...json(errorBody(error.code, error.message, error.detail)), isError: true };
     throw error;
   }
+}
+
+async function codeHostOf(deps: McpDeps, actor: Actor) {
+  const creds = await withOrganization(deps.pool, actor.organizationId, (client) =>
+    activeCredentials(client, deps.sealer, 'code_host'),
+  );
+  for (const host of deps.adapters.codeHosts) {
+    const credential = creds.find((c) => c.provider === host.id)?.credential;
+    if (credential) return { host, credential };
+  }
+  throw new AppError('connection.code_host_missing', 409, 'Connect your code host first.');
 }
 
 async function candidates(deps: McpDeps, actor: Actor): Promise<Candidate[]> {
@@ -164,6 +183,7 @@ function buildServer(deps: McpDeps, actor: Actor, scope: 'read' | 'act'): McpSer
         const project = await projectStatus(deps, actor, projectId);
         const manifest = await manifestView(deps, actor, projectId);
         const active = manifest.skills.filter((s) => s.active);
+        const known = (await catalog()).skills;
         return {
           project,
           manifest: {
@@ -175,7 +195,7 @@ function buildServer(deps: McpDeps, actor: Actor, scope: 'read' | 'act'): McpSer
           skills: active.map((s) => ({
             name: s.name,
             family: s.family,
-            description: deps.catalog.skills.find((c) => c.name === s.name)?.description ?? '',
+            description: known.find((c) => c.name === s.name)?.description ?? '',
           })),
           next: [
             'Read each active skill with get_skill before changing code; the repository’s own conventions (CLAUDE.md, AGENTS.md, the local skills folder) come first.',
@@ -187,6 +207,81 @@ function buildServer(deps: McpDeps, actor: Actor, scope: 'read' | 'act'): McpSer
             'If the server sleeps, call wake_server.',
           ].filter(Boolean),
         };
+      }),
+  );
+
+  server.registerTool(
+    'create_skill',
+    {
+      description:
+        "Keeps a way of doing as a skill of the organization (private; family opinion or design). Write it in the person's words; it is read by every agent of the organization.",
+      inputSchema: {
+        name: z.string(),
+        family: z.enum(['opinion', 'design']),
+        description: z.string(),
+        body: z.string(),
+      },
+      annotations: act,
+    },
+    async (input) =>
+      acting(async () => {
+        const parsed = skillInput.safeParse(input);
+        if (!parsed.success)
+          throw new AppError(
+            'request.invalid',
+            400,
+            'A name in kebab-case, a description, a body.',
+          );
+        return createSkill(deps, actor, parsed.data);
+      }),
+  );
+
+  server.registerTool(
+    'save_as_template',
+    {
+      description:
+        "Makes a project the organization's own template: its repository becomes the starter new projects are generated from, with its skills. Private until the person asks to share it.",
+      inputSchema: {
+        projectId: z.string(),
+        id: z.string(),
+        category: z.enum(['free', 'services', 'commerce', 'software', 'presence']).default('free'),
+        name: z.string().min(1).max(120),
+        description: z.string().min(1).max(300),
+        stack: z.array(z.string()).default([]),
+      },
+      annotations: act,
+    },
+    async (input) =>
+      acting(async () => {
+        const project = await projectStatus(deps, actor, input.projectId);
+        const manifest = await manifestView(deps, actor, input.projectId);
+        const skills = manifest.skills.filter((s) => s.active).map((s) => s.name);
+        const { host, credential } = await codeHostOf(deps, actor);
+        await host.markAsTemplate(credential, String(project.repository));
+        return createTemplate(deps, actor, {
+          id: input.id,
+          category: input.category,
+          name: { fr: input.name, en: input.name },
+          description: { fr: input.description, en: input.description },
+          stack: input.stack,
+          skills,
+          starter: String(project.repository),
+        });
+      }),
+  );
+
+  server.registerTool(
+    'share_with_everyone',
+    {
+      description:
+        "Asks Pono's operator to share a private template or skill with everyone. Nothing is shared until they approve it.",
+      inputSchema: { kind: z.enum(['template', 'skill']), name: z.string() },
+      annotations: act,
+    },
+    async ({ kind, name }) =>
+      acting(async () => {
+        await proposeSharing(deps, actor, kind, name);
+        return { proposed: true, kind, name };
       }),
   );
 
@@ -231,16 +326,24 @@ function buildServer(deps: McpDeps, actor: Actor, scope: 'read' | 'act'): McpSer
     async () => guard(() => withOrganization(deps.pool, actor.organizationId, usageView)),
   );
 
+  const catalog = () => catalogFor(deps.pool, deps.catalog, actor.organizationId);
+
   server.registerTool(
     'list_templates',
-    { description: 'The templates a project can start from.', annotations: read },
+    {
+      description:
+        "The templates a project can start from: Pono's, the operator's, the shared ones and the organization's own.",
+      annotations: read,
+    },
     async () =>
       guard(async () =>
-        deps.catalog.templates.map((t) => ({
+        (await catalog()).templates.map((t) => ({
           id: t.id,
           name: t.name,
           description: t.description,
+          stack: t.stack,
           skills: t.skills,
+          scope: t.scope,
         })),
       ),
   );
@@ -254,7 +357,7 @@ function buildServer(deps: McpDeps, actor: Actor, scope: 'read' | 'act'): McpSer
     },
     async ({ name }) =>
       guard(async () => {
-        const skill = deps.catalog.skills.find((s) => s.name === name);
+        const skill = (await catalog()).skills.find((s) => s.name === name);
         if (!skill) throw new AppError('skill.not_found', 404, 'No such skill.');
         return skill;
       }),

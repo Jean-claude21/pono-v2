@@ -247,3 +247,33 @@ describe('the person’s level (D-015)', () => {
     await client.close();
   });
 });
+
+describe('templates and skills from a conversation (D-016)', () => {
+  it('keeps a skill and turns a project into a template, both private', async () => {
+    const { cookie, token } = await workshop('act');
+    const client = await agent(token);
+    const name = `notes-${randomUUID().slice(0, 6)}`;
+    const skill = await tool(client, 'create_skill', {
+      name,
+      family: 'opinion',
+      description: 'How our project notes are written.',
+      body: '- Notes are short, dated, and name the decision first.',
+    });
+    expect(skill.body.scope).toBe('private');
+    const projects = (await (await call(t, cookie, '/v1/projects')).json()).projects;
+    const id = `tpl-${randomUUID().slice(0, 6)}`;
+    const saved = await tool(client, 'save_as_template', {
+      projectId: projects[0].id,
+      id,
+      name: 'Notre base',
+      description: 'La base de nos projets',
+    });
+    expect(saved.body).toMatchObject({ id, scope: 'private', starter: projects[0].repository });
+    expect(t.world.templates.has(projects[0].repository)).toBe(true);
+    const listed = (await tool(client, 'list_templates')).body.map((x: { id: string }) => x.id);
+    expect(listed).toContain(id);
+    const shared = await tool(client, 'share_with_everyone', { kind: 'skill', name });
+    expect(shared.body.proposed).toBe(true);
+    await client.close();
+  });
+});

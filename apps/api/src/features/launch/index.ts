@@ -4,7 +4,7 @@ import type { Actor, AppEnv } from '../../platform/context.js';
 import { withOrganization } from '../../platform/db.js';
 import { AppError } from '../../platform/errors.js';
 import { ProviderError } from '../../platform/http.js';
-import type { Catalog } from '../catalog/index.js';
+import { catalogFor, type Catalog } from '../catalog/index.js';
 import { activeCredentials } from '../connections/index.js';
 import { record } from '../journal/index.js';
 import { writeManifest } from '../manifest/domain.js';
@@ -16,6 +16,9 @@ import {
   type ServersDeps,
   type ServerView,
 } from '../servers/index.js';
+
+/** The Impeccable version Pono reviewed; changed only by a commit to Pono. */
+export const IMPECCABLE_VERSION = '4.8.0';
 
 export interface LaunchDeps extends ProjectsDeps, ServersDeps {
   catalog: Catalog;
@@ -69,7 +72,8 @@ export async function launchProject(
   input: LaunchInput,
 ): Promise<Launched> {
   const started = Date.now();
-  const template = deps.catalog.templates.find((t) => t.id === input.template);
+  const catalog = await catalogFor(deps.pool, deps.catalog, actor.organizationId);
+  const template = catalog.templates.find((t) => t.id === input.template);
   if (!template) throw new AppError('template.not_found', 404, 'No such template.');
 
   await withOrganization(deps.pool, actor.organizationId, async (client) => {
@@ -105,6 +109,7 @@ export async function launchProject(
       name: input.name,
       private: input.private,
       description: template.description.en,
+      ...(template.starter ? { starter: template.starter } : {}),
       files: {
         'pono.yaml': manifest({
           name: input.name,
@@ -126,7 +131,12 @@ export async function launchProject(
   });
   const server = await allocateServer(deps, actor, projectId, {
     agent: input.agent,
-    env: { PONO_SKILLS: template.skills.join(','), PONO_TEMPLATE: template.id },
+    env: {
+      PONO_SKILLS: template.skills.join(','),
+      PONO_TEMPLATE: template.id,
+      // Pinned and reviewed design skills (D-016): the agent installs this exact version.
+      ...(template.skills.includes('impeccable') ? { PONO_IMPECCABLE: IMPECCABLE_VERSION } : {}),
+    },
     ...(input.sleepServerId ? { sleepServerId: input.sleepServerId } : {}),
   });
   const durationMs = Date.now() - started;

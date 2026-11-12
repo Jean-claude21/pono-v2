@@ -3,11 +3,17 @@ import { z } from 'zod';
 import type { AppEnv } from '../../platform/context.js';
 import { withOrganization, type Pool } from '../../platform/db.js';
 import { AppError } from '../../platform/errors.js';
+import { readTemplateRepository, skillInput } from '../catalog/index.js';
+import { activeCredentials } from '../connections/index.js';
 import { record } from '../journal/index.js';
+import type { WorkshopAdapters } from '../projects/index.js';
+import type { Sealer } from '../../platform/secrets.js';
 import { PLANS, type Plan, type ProjectServerHost } from '../servers/index.js';
 
 export interface AdminDeps {
   pool: Pool;
+  sealer: Sealer;
+  adapters: WorkshopAdapters;
   serverHost: ProjectServerHost;
   /** Logins of the platform's operators (`PONO_ADMIN_LOGINS`). */
   admins: string[];
@@ -134,6 +140,127 @@ export function adminRoutes(deps: AdminDeps): Hono<AppEnv> {
           detail: { operator: c.var.actor.login },
         });
       });
+      return c.body(null, 204);
+    })
+    .get('/catalog', async (c) => {
+      const { rows } = await deps.pool.query<{
+        id: string;
+        organization_id: string | null;
+        organization_name: string | null;
+        kind: string;
+        name: string;
+        body: unknown;
+        sharing: string;
+        updated_at: Date;
+      }>('SELECT * FROM admin_catalog_entries()');
+      return c.json({
+        entries: rows.map((r) => ({
+          id: r.id,
+          organization: r.organization_name,
+          kind: r.kind,
+          name: r.name,
+          body: r.body,
+          sharing: r.sharing,
+          updatedAt: r.updated_at.toISOString(),
+        })),
+      });
+    })
+    .post('/catalog/import', async (c) => {
+      const body = z
+        .object({ repository: z.string().regex(/^[\w.-]+\/[\w.-]+$/) })
+        .safeParse(await c.req.json().catch(() => null));
+      if (!body.success)
+        throw new AppError('request.invalid', 400, 'Expected a repository: owner/name.');
+      const actor = c.var.actor;
+      const creds = await withOrganization(deps.pool, actor.organizationId, (client) =>
+        activeCredentials(client, deps.sealer, 'code_host'),
+      );
+      const host = deps.adapters.codeHosts.find((h) => creds.some((x) => x.provider === h.id));
+      const credential = creds.find((x) => x.provider === host?.id)?.credential;
+      if (!host || !credential)
+        throw new AppError('connection.code_host_missing', 409, 'Connect your code host first.');
+      const repository = await host.repository(credential, body.data.repository);
+      if (!repository)
+        throw new AppError('project.repository_not_found', 404, 'No such repository.');
+      const ref = repository.defaultBranch;
+      const templateFile = await host.fileAt(
+        credential,
+        repository.fullName,
+        'pono-template.yaml',
+        ref,
+      );
+      if (!templateFile)
+        throw new AppError('catalog.unreadable', 422, 'The repository has no pono-template.yaml.');
+      const names = (
+        await host.listDirectory(credential, repository.fullName, '.pono/skills', ref)
+      ).filter((n) => n.endsWith('.md'));
+      const skillFiles: string[] = [];
+      for (const n of names) {
+        const content = await host.fileAt(
+          credential,
+          repository.fullName,
+          `.pono/skills/${n}`,
+          ref,
+        );
+        if (content) skillFiles.push(content);
+      }
+      const { template, skills } = readTemplateRepository(
+        repository.fullName,
+        templateFile,
+        skillFiles,
+      );
+      for (const skill of skills)
+        await deps.pool.query('SELECT admin_catalog_publish($1, $2, $3)', [
+          'skill',
+          skill.name,
+          JSON.stringify(skillInput.parse(skill)),
+        ]);
+      await host.markAsTemplate(credential, repository.fullName);
+      await deps.pool.query('SELECT admin_catalog_publish($1, $2, $3)', [
+        'template',
+        template.id,
+        JSON.stringify(template),
+      ]);
+      await withOrganization(deps.pool, actor.organizationId, (client) =>
+        record(client, {
+          organizationId: actor.organizationId,
+          action: 'admin.catalog_imported',
+          actorPerson: actor.personId,
+          channel: 'console',
+          detail: { repository: repository.fullName, template: template.id, skills: skills.length },
+        }),
+      );
+      return c.json({ template, skills: skills.map((s) => s.name) }, 201);
+    })
+    .post('/catalog/:id/review', async (c) => {
+      const id = c.req.param('id');
+      const body = z
+        .object({ decision: z.enum(['shared', 'refused', 'private']) })
+        .safeParse(await c.req.json().catch(() => null));
+      if (!z.uuid().safeParse(id).success || !body.success)
+        throw new AppError('request.invalid', 400, 'Expected shared, refused or private.');
+      const { rows } = await deps.pool.query<{ org: string | null }>(
+        'SELECT admin_catalog_review($1, $2) AS org',
+        [id, body.data.decision],
+      );
+      const org = rows[0]?.org;
+      if (!org) throw new AppError('catalog.not_found', 404, 'No such entry.');
+      await withOrganization(deps.pool, org, (client) =>
+        record(client, {
+          organizationId: org,
+          action: `catalog.${body.data.decision === 'shared' ? 'shared' : body.data.decision === 'refused' ? 'refused' : 'unshared'}`,
+          actorPerson: c.var.actor.personId,
+          channel: 'console',
+          detail: { operator: c.var.actor.login },
+        }),
+      );
+      return c.body(null, 204);
+    })
+    .delete('/catalog/:id', async (c) => {
+      const id = c.req.param('id');
+      if (!z.uuid().safeParse(id).success)
+        throw new AppError('catalog.not_found', 404, 'No such entry.');
+      await deps.pool.query('SELECT admin_catalog_remove($1)', [id]);
       return c.body(null, 204);
     });
 }

@@ -3,6 +3,18 @@ import { getLocale } from '@/paraglide/runtime.js';
 
 /** Stable codes from the API, translated here (D-009). An unknown code shows as it is. */
 const tables: Record<string, Record<string, () => string>> = {
+  kind_entry: {
+    template: m.kind_entry_template,
+    skill: m.kind_entry_skill,
+  },
+  scope: {
+    pono: m.scope_pono,
+    official: m.scope_official,
+    private: m.scope_private,
+    proposed: m.scope_proposed,
+    shared: m.scope_shared,
+    refused: m.scope_refused,
+  },
   because: {
     template: m.because_template,
     safety_default: m.because_safety_default,
@@ -88,6 +100,13 @@ const tables: Record<string, Record<string, () => string>> = {
   },
   env: { production: m.env_production, preview: m.env_preview },
   action: {
+    'catalog.skill_saved': m.action_catalog_skill_saved,
+    'catalog.template_saved': m.action_catalog_template_saved,
+    'catalog.sharing_proposed': m.action_catalog_sharing_proposed,
+    'catalog.shared': m.action_catalog_shared,
+    'catalog.refused': m.action_catalog_refused,
+    'catalog.unshared': m.action_catalog_unshared,
+    'admin.catalog_imported': m.action_admin_catalog_imported,
     'manifest.proposed': m.action_manifest_proposed,
     'manifest.read': m.action_manifest_read,
     'manifest.invalid': m.action_manifest_invalid,
@@ -146,6 +165,10 @@ const tables: Record<string, Record<string, () => string>> = {
     account: m.meter_account,
   },
   error: {
+    'catalog.safety_reserved': m.error_catalog_safety_reserved,
+    'catalog.name_taken': m.error_catalog_name_taken,
+    'catalog.unreadable': m.error_catalog_unreadable,
+    'catalog.not_found': m.error_catalog_not_found,
     'skill.not_found': m.error_skill_not_found,
     'connection.rejected': m.error_connection_rejected,
     'connection.unreachable': m.error_connection_unreachable,
