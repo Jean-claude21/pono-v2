@@ -1,4 +1,5 @@
 # Tasks: Le manifeste et l'adoption de tout projet
+
 - [x] T001 Migration `0009_manifest.sql` : origine, template, état et contenu du manifeste
 - [x] T002 Domaine : schéma, lecture, écriture, lecteurs `project.yaml` / `.fluxio` / `stack.hcl`, pré-remplissage
 - [x] T003 Port `proposeFiles` (pull request) ; adaptateur GitHub
