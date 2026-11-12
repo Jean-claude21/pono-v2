@@ -1,5 +1,6 @@
 import { Hono } from 'hono';
 import { adminRoutes } from './features/admin/index.js';
+import { analyticsRoutes, type SiteAnalytics } from './features/analytics/index.js';
 import { billingWebhook, planRoutes, type BillingProvider } from './features/billing/index.js';
 import { agentRoutes, mcpHandler } from './features/agents/index.js';
 import { catalogRoutes, type Catalog } from './features/catalog/index.js';
@@ -37,6 +38,8 @@ export interface AppDeps {
   serverIdleSeconds: number;
   catalog: Catalog;
   billing: BillingProvider;
+  /** Where projects' visits are counted (D-017): Umami, PostHog. */
+  analytics?: SiteAnalytics[];
   admins: string[];
   serverAccount?: () => Promise<{ balanceMicros: number; activeLimit: number } | null>;
   now: () => Date;
@@ -44,8 +47,9 @@ export interface AppDeps {
 
 /** The API: every route, and errors in one shape with a stable code (FR-008). */
 export function createApp(appDeps: AppDeps): Hono<AppEnv> {
-  const deps: AppDeps & ManifestDeps = {
+  const deps: AppDeps & ManifestDeps & { analytics: SiteAnalytics[] } = {
     ...appDeps,
+    analytics: appDeps.analytics ?? [],
     afterImport: async (actor, projectId) => {
       await syncManifest(deps, actor, projectId);
     },
@@ -60,6 +64,7 @@ export function createApp(appDeps: AppDeps): Hono<AppEnv> {
   v1.route('/connections', connectionRoutes(deps));
   v1.route('/', projectRoutes(deps));
   v1.route('/', manifestRoutes(deps));
+  v1.route('/', analyticsRoutes(deps));
   v1.route(
     '/',
     usageRoutes({ ...deps, internalUsage: [...(deps.internalUsage ?? []), serversUsage()] }),

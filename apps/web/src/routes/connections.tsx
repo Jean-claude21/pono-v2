@@ -24,7 +24,7 @@ function Connections() {
   if (!data.result) return <p className="mute">{m.loading()}</p>;
   if (!data.result.ok) return <p className="notice">{label('error', data.result.error.code)}</p>;
   const { connections, available } = data.result.data;
-  const kinds = ['code_host', 'hosting', 'database'];
+  const kinds = ['code_host', 'hosting', 'database', 'ai', 'analytics'];
   return (
     <>
       <div className="topline">
@@ -108,7 +108,7 @@ function Provider({
                 <input
                   id={`${available.provider}-${field}`}
                   name={field}
-                  type={field === 'token' ? 'password' : 'text'}
+                  type={['token', 'apiKey', 'password'].includes(field) ? 'password' : 'text'}
                   autoComplete="off"
                   required
                 />

@@ -217,3 +217,15 @@ public qui ne veut pas de code chez lui : un dépôt hébergé par Pono deviendr
 
 **Ce qui la renverserait.** Un volume de propositions qu'une personne ne peut plus relire : il
 faudrait alors des relecteurs de confiance, ou une analyse automatique en premier filtre.
+
+---
+
+## D-017 — Les visites se lisent chez Umami, puis PostHog, derrière un port
+
+**Tranché le 2026-11-12**, sur la demande de l'auteur (« on va utiliser Umami maintenant »).
+
+- Le port `SiteAnalytics` ne nomme aucun fournisseur ; Umami (Cloud ou auto-hébergé) est le premier
+  adaptateur, PostHog le second.
+- Chaque personne connecte son propre compte ; Pono lit, il ne garde aucune donnée de visite.
+- Un projet lancé reçoit son site dès le premier jour ; le site est nommé dans `pono.yaml`.
+- La console de Pono se compte avec Umami, sans cookie, jamais sur les pages de l'exploitant.

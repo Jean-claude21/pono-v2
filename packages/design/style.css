@@ -374,3 +374,7 @@ button { font: inherit; color: inherit; cursor: pointer; border: 0; background: 
 .manifest-status.missing { color: var(--failing); }
 .skill-list { list-style: none; margin: 8px 0 0; padding: 0; }
 .skill-list li { padding: 6px 0; border-bottom: 1px solid var(--hairline); }
+
+/* Visits (D-017) */
+.two-cols { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; }
+@media (max-width: 720px) { .two-cols { grid-template-columns: 1fr; } }
