@@ -13,7 +13,7 @@ export interface ProjectsDeps {
   adapters: WorkshopAdapters;
   now: () => Date;
   /** Called once a project is imported: the manifest is read, or proposed (D-014). */
-  afterImport?: (actor: Actor, projectId: string) => Promise<void>;
+  afterImport?: (actor: Actor, projectId: string, options: { propose: boolean }) => Promise<void>;
 }
 
 type Found = 'found' | 'missing' | 'unknown';
@@ -61,7 +61,9 @@ export async function importProject(
   deps: ProjectsDeps,
   actor: Actor,
   fullName: string,
-  from: { origin: 'template' | 'adopted'; template?: string } = { origin: 'adopted' },
+  from: { origin: 'template' | 'adopted'; template?: string; proposeManifest?: boolean } = {
+    origin: 'adopted',
+  },
 ): Promise<string> {
   const creds = await credentials(deps, actor.organizationId);
   const host = codeHostOf(deps, creds);
@@ -149,7 +151,9 @@ export async function importProject(
   });
   await refreshProject(deps, actor, id);
   // The manifest never blocks an import: a failure leaves it to be read again later.
-  await deps.afterImport?.(actor, id).catch(() => undefined);
+  await deps
+    .afterImport?.(actor, id, { propose: from.proposeManifest ?? true })
+    .catch(() => undefined);
   return id;
 }
 

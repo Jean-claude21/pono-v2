@@ -222,3 +222,21 @@ describe('adopting any repository', () => {
     ).toBe(true);
   });
 });
+
+describe('importing without a proposal', () => {
+  it('follows the project and proposes pono.yaml only when asked', async () => {
+    const cookie = await workshop();
+    const fullName = repository(`quiet-${randomUUID().slice(0, 6)}`);
+    const res = await call(t, cookie, '/v1/projects', {
+      method: 'POST',
+      body: { repository: fullName, proposeManifest: false },
+    });
+    const { id } = await res.json();
+    expect(t.world.opened.has(fullName)).toBe(false);
+    expect((await (await call(t, cookie, `/v1/projects/${id}/manifest`)).json()).status).toBe(
+      'missing',
+    );
+    await call(t, cookie, `/v1/projects/${id}/manifest/sync`, { method: 'POST' });
+    expect(t.world.opened.get(fullName)!.branch).toBe('pono/manifest');
+  });
+});

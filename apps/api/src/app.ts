@@ -55,8 +55,8 @@ export function createApp(appDeps: AppDeps): Hono<AppEnv> {
   const deps: AppDeps & ManifestDeps & { analytics: SiteAnalytics[] } = {
     ...appDeps,
     analytics: appDeps.analytics ?? [],
-    afterImport: async (actor, projectId) => {
-      await syncManifest(deps, actor, projectId);
+    afterImport: async (actor, projectId, options) => {
+      await syncManifest(deps, actor, projectId, options);
     },
   };
   const app = new Hono<AppEnv>();
