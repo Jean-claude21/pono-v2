@@ -301,6 +301,7 @@ export function testApp(): TestApp {
         ),
     }),
     admins: ['operator'],
+    rateLimits: { auth: 100_000, v1: 100_000, mcp: 100_000 },
     now: () => now.value,
   };
   const app: ReturnType<typeof createApp> = createApp(deps);

@@ -243,3 +243,17 @@ arrive ») et D-006.
 - Les alertes partent par email (Resend), avec la clé de Pono ; une alerte n'est envoyée qu'une fois.
 - Coolify héberge ce que Netlify et Cloudflare ne font pas tourner. N'ayant pas de retour arrière,
   il est épinglé au commit précédent ; il le reste jusqu'à ce qu'une personne le remette à HEAD.
+
+---
+
+## D-019 — OAuth 2.1 pour les clients MCP, variables scellées pour les serveurs
+
+**Tranché le 2026-11-12**, en suite de D-007 et D-011.
+
+- Pono est son propre serveur d'autorisation : clients publics enregistrés dynamiquement, PKCE S256
+  seulement, approbation par une personne dans la console. L'accès accordé devient un jeton d'agent
+  ordinaire : mêmes droits que la personne, journal, coupure d'un clic. Pas de jeton de
+  rafraîchissement : l'accès dure jusqu'à ce qu'on le coupe.
+- Les variables de développement sont tapées par une personne, scellées, envoyées au seul serveur
+  du projet au démarrage. Un agent ne voit que des noms et peut en demander un.
+- Les noms `PONO_` sont réservés à Pono.

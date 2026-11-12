@@ -16,6 +16,8 @@ export { githubIdentity } from './infrastructure/github.js';
 
 export const SESSION_COOKIE = 'pono_session';
 const STATE_COOKIE = 'pono_oauth_state';
+const NEXT_COOKIE = 'pono_next';
+const NEXT = /^\/oauth\/authorize\?[\w%=&.~+-]+$/;
 const SESSION_DAYS = 30;
 
 export interface IdentityDeps {
@@ -75,6 +77,10 @@ export function authRoutes(deps: IdentityDeps): Hono<AppEnv> {
       if (!provider) throw new AppError('auth.unknown_provider', 404, 'No such sign-in.');
       const state = randomBytes(16).toString('base64url');
       setCookie(c, STATE_COOKIE, state, { ...cookieOptions, maxAge: 600 });
+      // Back to an agent's authorization after signing in (D-019); nowhere else.
+      const next = c.req.query('next');
+      if (next && NEXT.test(next))
+        setCookie(c, NEXT_COOKIE, next, { ...cookieOptions, maxAge: 600 });
       return c.redirect(
         provider.authorizeUrl(state, redirectUri(provider.id), c.req.query('login')),
       );
@@ -129,7 +135,9 @@ export function authRoutes(deps: IdentityDeps): Hono<AppEnv> {
       const expires = new Date(deps.now().getTime() + SESSION_DAYS * 86_400_000);
       await deps.pool.query('SELECT open_session($1, $2, $3)', [personId, session.hash, expires]);
       setCookie(c, SESSION_COOKIE, session.token, { ...cookieOptions, expires });
-      return c.redirect(`${deps.publicUrl}/`);
+      const next = getCookie(c, NEXT_COOKIE);
+      deleteCookie(c, NEXT_COOKIE, { path: '/' });
+      return c.redirect(`${deps.publicUrl}${next && NEXT.test(next) ? next : '/'}`);
     })
     .post('/sign-out', async (c) => {
       const token = getCookie(c, SESSION_COOKIE);

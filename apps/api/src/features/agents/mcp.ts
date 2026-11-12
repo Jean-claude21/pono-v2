@@ -16,6 +16,7 @@ import {
 } from '../catalog/index.js';
 import { launchProject, type LaunchDeps } from '../launch/index.js';
 import { siteMetrics } from '../analytics/index.js';
+import { checkSecrets, listVariables, requestVariable, variableName } from '../variables/index.js';
 import { activeCredentials } from '../connections/index.js';
 import { LEVEL_GUIDANCE, LEVELS, levelOf, setLevel } from '../identity/index.js';
 import { manifestView, proposeSkills } from '../manifest/index.js';
@@ -23,10 +24,12 @@ import { importProject, refreshProject } from '../projects/application.js';
 import { evaluateReleases, listReleases, requestRollback } from '../releases/index.js';
 import { serversView, sleepServer, syncServers, wakeServer } from '../servers/index.js';
 import { readUsage, usageView, type UsageDeps } from '../usage/index.js';
+import { mcpUnauthorized } from './oauth.js';
 import { recognize, type Candidate } from './recognize.js';
 
 export interface McpDeps extends LaunchDeps, UsageDeps {
   catalog: Catalog;
+  publicUrl: string;
 }
 
 const INSTRUCTIONS = `Pono is the person's workshop: their projects, what their subscriptions cost, a server for each
@@ -287,6 +290,51 @@ function buildServer(deps: McpDeps, actor: Actor, scope: 'read' | 'act'): McpSer
   );
 
   server.registerTool(
+    'list_variables',
+    {
+      description:
+        "A project's development variables, by name, and whether each is set. Values are never shown: they reach the project's server only.",
+      inputSchema: { projectId: z.string() },
+      annotations: read,
+    },
+    async ({ projectId }) => guard(() => listVariables(deps, actor, projectId)),
+  );
+
+  server.registerTool(
+    'request_variable',
+    {
+      description:
+        'Asks the person for a development variable the project needs (a name in CAPITALS and why). They set the value in the console; never ask for a value in the conversation.',
+      inputSchema: { projectId: z.string(), name: z.string(), reason: z.string().max(280) },
+      annotations: act,
+    },
+    async ({ projectId, name, reason }) =>
+      acting(async () => {
+        const parsed = variableName.safeParse(name);
+        if (!parsed.success)
+          throw new AppError(
+            'variable.invalid_name',
+            400,
+            'A name in CAPITALS, not starting with PONO_.',
+          );
+        return requestVariable(deps, actor, projectId, parsed.data, reason);
+      }),
+  );
+
+  server.registerTool(
+    'check_secrets',
+    {
+      description:
+        'Checks files for secrets before you commit them: the same rules as the release guard. Call it on every batch of files you are about to commit; fix every finding first.',
+      inputSchema: {
+        files: z.array(z.object({ path: z.string(), content: z.string().max(500_000) })).max(200),
+      },
+      annotations: read,
+    },
+    async ({ files }) => guard(async () => checkSecrets(files)),
+  );
+
+  server.registerTool(
     'adopt_project',
     {
       description:
@@ -507,10 +555,7 @@ function buildServer(deps: McpDeps, actor: Actor, scope: 'read' | 'act'): McpSer
 export function mcpHandler(deps: McpDeps) {
   return async (c: Context<AppEnv>): Promise<Response> => {
     const bearer = c.req.header('authorization')?.match(/^Bearer pono_(\S+)$/)?.[1];
-    if (!bearer)
-      return c.json(errorBody('auth.required', 'An agent token is required.'), 401, {
-        'www-authenticate': 'Bearer',
-      });
+    if (!bearer) return mcpUnauthorized(deps.publicUrl);
     const { rows } = await deps.pool.query<{
       id: string;
       organization_id: string;
@@ -520,7 +565,7 @@ export function mcpHandler(deps: McpDeps) {
       login: string;
     }>('SELECT * FROM agent_by_token($1)', [hashToken(bearer)]);
     const agent = rows[0];
-    if (!agent) return c.json(errorBody('auth.required', 'This agent token is not valid.'), 401);
+    if (!agent) return mcpUnauthorized(deps.publicUrl);
     const actor: Actor = {
       personId: agent.person_id,
       login: agent.login,

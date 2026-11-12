@@ -105,6 +105,10 @@ const tables: Record<string, Record<string, () => string>> = {
   },
   env: { production: m.env_production, preview: m.env_preview },
   action: {
+    'variable.set': m.action_variable_set,
+    'variable.removed': m.action_variable_removed,
+    'variable.requested': m.action_variable_requested,
+    'release.auto_rolled_back': m.action_release_auto_rolled_back,
     'analytics.linked': m.action_analytics_linked,
     'catalog.skill_saved': m.action_catalog_skill_saved,
     'catalog.template_saved': m.action_catalog_template_saved,
@@ -180,6 +184,10 @@ const tables: Record<string, Record<string, () => string>> = {
     account: m.meter_account,
   },
   error: {
+    'variables.person_only': m.error_variables_person_only,
+    'variable.invalid_name': m.error_variable_invalid_name,
+    'oauth.unknown_client': m.error_oauth_unknown_client,
+    'rate.limited': m.error_rate_limited,
     'analytics.not_connected': m.error_analytics_not_connected,
     'analytics.site_not_found': m.error_analytics_site_not_found,
     'catalog.safety_reserved': m.error_catalog_safety_reserved,
