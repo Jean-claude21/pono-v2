@@ -3,6 +3,25 @@ import { getLocale } from '@/paraglide/runtime.js';
 
 /** Stable codes from the API, translated here (D-009). An unknown code shows as it is. */
 const tables: Record<string, Record<string, () => string>> = {
+  because: {
+    template: m.because_template,
+    safety_default: m.because_safety_default,
+    chosen: m.because_chosen,
+    turned_off: m.because_turned_off,
+    not_chosen: m.because_not_chosen,
+  },
+  family: {
+    safety: m.family_safety,
+    opinion: m.family_opinion,
+    design: m.family_design,
+  },
+  manifest: {
+    present: m.manifest_present,
+    proposed: m.manifest_proposed,
+    invalid: m.manifest_invalid,
+    missing: m.manifest_missing,
+    unknown: m.manifest_unknown,
+  },
   category: {
     free: m.category_free,
     services: m.category_services,
@@ -69,6 +88,10 @@ const tables: Record<string, Record<string, () => string>> = {
   },
   env: { production: m.env_production, preview: m.env_preview },
   action: {
+    'manifest.proposed': m.action_manifest_proposed,
+    'manifest.read': m.action_manifest_read,
+    'manifest.invalid': m.action_manifest_invalid,
+    'skills.proposed': m.action_skills_proposed,
     'organization.created': m.action_organization_created,
     'connection.created': m.action_connection_created,
     'connection.revoked': m.action_connection_revoked,
@@ -123,6 +146,7 @@ const tables: Record<string, Record<string, () => string>> = {
     account: m.meter_account,
   },
   error: {
+    'skill.not_found': m.error_skill_not_found,
     'connection.rejected': m.error_connection_rejected,
     'connection.unreachable': m.error_connection_unreachable,
     'connection.exists': m.error_connection_exists,

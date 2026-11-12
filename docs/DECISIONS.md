@@ -166,3 +166,21 @@ Codex, OpenCode, ou aucun.
 Le rôle de l'API ne peut pas écrire le plan d'une organisation ; seule la fonction appelée par un
 événement signé du fournisseur de paiement le fait. Sans clé Stripe, un fournisseur de développement
 signe localement ; en production sans clé, changer de plan est refusé.
+
+---
+
+## D-014 — `pono.yaml` à la racine, et tout projet peut être adopté
+
+**Tranché le 2026-11-12**, sur la demande de l'auteur (« peu importe le projet, on doit pouvoir le
+faire »).
+
+- Le manifeste est `pono.yaml`, à la racine : YAML plutôt que HCL ou JSON, pour les commentaires,
+  la lecture humaine et l'écriture sûre par les agents ; un schéma strict versionné le valide.
+- Il ne contient que des identifiants : ni secret, ni mode de mise en production (D-006).
+- Un projet entre par un template ou par adoption. L'adoption pré-remplit le fichier depuis
+  `project.yaml`, `.fluxio/project.json`, `stack.hcl` et la détection, et le propose en pull
+  request. Pono n'écrit jamais la branche de production.
+- Les skills ont trois familles. La sûreté est proposée partout ; l'architecture et le design de
+  Pono ne s'imposent qu'aux projets lancés depuis un template.
+
+**Ce qui la renverserait.** Un besoin de configuration que YAML exprime mal (logique, héritage).

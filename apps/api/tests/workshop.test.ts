@@ -263,6 +263,7 @@ describe('US3 and US4 — projects', () => {
     });
     expect(detail.deployments.map((d: { commit: string }) => d.commit)).toEqual(['abc', 'abd']);
     expect(detail.journal.map((j: { action: string }) => j.action)).toEqual([
+      'manifest.proposed',
       'project.refreshed',
       'project.imported',
     ]);

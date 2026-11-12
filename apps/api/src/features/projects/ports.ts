@@ -26,6 +26,21 @@ export interface CodeHost {
   proposalFiles(credential: string, fullName: string, number: number): Promise<ChangedFile[]>;
   /** A file at a commit, or null when it does not exist. */
   fileAt(credential: string, fullName: string, path: string, ref: string): Promise<string | null>;
+  /**
+   * Proposes files in a pull request from `branch` (created from `base`, or updated when it exists).
+   * Answers the open pull request: the person merges it, Pono never writes the base branch.
+   */
+  proposeFiles(
+    credential: string,
+    fullName: string,
+    input: {
+      base: string;
+      branch: string;
+      title: string;
+      body: string;
+      files: Record<string, string>;
+    },
+  ): Promise<{ number: number; url: string }>;
   /** The `pono/release` status on a commit: the code host blocks the merge on it. */
   setReleaseStatus(
     credential: string,

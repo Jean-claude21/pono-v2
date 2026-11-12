@@ -6,3 +6,7 @@ packages/design/
 **/.output/
 **/dist/
 apps/web/src/paraglide/
+apps/web/project.inlang/.lix/
+apps/web/project.inlang/cache/
+apps/web/project.inlang/.meta.json
+apps/web/project.inlang/README.md

@@ -13,3 +13,5 @@ apps/web/src/paraglide/
 test-results/
 playwright-report/
 .pono-dev-db/
+apps/web/project.inlang/.lix/
+apps/web/project.inlang/cache/

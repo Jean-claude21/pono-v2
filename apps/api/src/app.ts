@@ -12,6 +12,7 @@ import {
   type IdentityProvider,
 } from './features/identity/index.js';
 import { launchRoutes } from './features/launch/index.js';
+import { manifestRoutes, syncManifest, type ManifestDeps } from './features/manifest/index.js';
 import { projectRoutes, type WorkshopAdapters } from './features/projects/index.js';
 import { releaseRoutes } from './features/releases/index.js';
 import { serverRoutes, serversUsage, type ProjectServerHost } from './features/servers/index.js';
@@ -42,7 +43,13 @@ export interface AppDeps {
 }
 
 /** The API: every route, and errors in one shape with a stable code (FR-008). */
-export function createApp(deps: AppDeps): Hono<AppEnv> {
+export function createApp(appDeps: AppDeps): Hono<AppEnv> {
+  const deps: AppDeps & ManifestDeps = {
+    ...appDeps,
+    afterImport: async (actor, projectId) => {
+      await syncManifest(deps, actor, projectId);
+    },
+  };
   const app = new Hono<AppEnv>();
   app.route('/health', healthRoutes({ databaseUp: () => ping(deps.pool) }));
   app.route('/auth', authRoutes(deps));
@@ -52,6 +59,7 @@ export function createApp(deps: AppDeps): Hono<AppEnv> {
   v1.route('/me', meRoutes(deps));
   v1.route('/connections', connectionRoutes(deps));
   v1.route('/', projectRoutes(deps));
+  v1.route('/', manifestRoutes(deps));
   v1.route(
     '/',
     usageRoutes({ ...deps, internalUsage: [...(deps.internalUsage ?? []), serversUsage()] }),

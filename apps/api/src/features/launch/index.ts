@@ -7,6 +7,7 @@ import { ProviderError } from '../../platform/http.js';
 import type { Catalog } from '../catalog/index.js';
 import { activeCredentials } from '../connections/index.js';
 import { record } from '../journal/index.js';
+import { writeManifest } from '../manifest/domain.js';
 import { importProject, type ProjectsDeps } from '../projects/application.js';
 import {
   allocateServer,
@@ -43,18 +44,18 @@ export function manifest(input: {
   skills: string[];
   agent: Agent;
 }): string {
-  return [
-    `# Pono manifest: the project's truth, kept in its own repository.`,
-    `name: ${input.name}`,
-    `template: ${input.template}`,
-    `agent: ${input.agent}`,
-    `skills:`,
-    ...input.skills.map((s) => `  - ${s}`),
-    `release:`,
-    `  mode: ask`,
-    `declared_destructions: []`,
-    '',
-  ].join('\n');
+  return writeManifest({
+    version: 1,
+    name: input.name,
+    template: input.template,
+    agent: input.agent,
+    environments: {
+      production: { branch: 'main' },
+      development: { branch: 'dev', server: 'pono' },
+    },
+    skills: { use: input.skills, local: '.pono/skills/' },
+    release: { declared_destructions: [] },
+  });
 }
 
 /**
@@ -119,7 +120,10 @@ export async function launchProject(
     throw error;
   }
 
-  const projectId = await importProject(deps, actor, repository.fullName);
+  const projectId = await importProject(deps, actor, repository.fullName, {
+    origin: 'template',
+    template: template.id,
+  });
   const server = await allocateServer(deps, actor, projectId, {
     agent: input.agent,
     env: { PONO_SKILLS: template.skills.join(','), PONO_TEMPLATE: template.id },

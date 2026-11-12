@@ -113,10 +113,18 @@ describe('migrations guard', () => {
   it('reads the declared destructions of pono.yaml', () => {
     expect(
       declaredDestructions(
-        'name: x\ndeclared_destructions:\n  - migrations/0004.sql\n  - file: "db/0005.sql"\nrelease:\n  mode: ask\n',
+        'version: 1\nname: x\nrelease:\n  declared_destructions:\n    - migrations/0004.sql\n    - file: "db/0005.sql"\n',
       ),
     ).toEqual(['migrations/0004.sql', 'db/0005.sql']);
-    expect(declaredDestructions('declared_destructions: []\n')).toEqual([]);
+    expect(
+      declaredDestructions('version: 1\nname: x\nrelease:\n  declared_destructions: []\n'),
+    ).toEqual([]);
+    // The release mode never reads from the repository: such a file declares nothing.
+    expect(
+      declaredDestructions(
+        'version: 1\nname: x\nrelease:\n  mode: bypass\n  declared_destructions: [a.sql]\n',
+      ),
+    ).toEqual([]);
     expect(declaredDestructions(null)).toEqual([]);
   });
 });
