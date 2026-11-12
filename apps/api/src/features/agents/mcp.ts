@@ -8,6 +8,7 @@ import { AppError, errorBody } from '../../platform/errors.js';
 import { hashToken } from '../../platform/secrets.js';
 import type { Catalog } from '../catalog/index.js';
 import { launchProject, type LaunchDeps } from '../launch/index.js';
+import { LEVEL_GUIDANCE, LEVELS, levelOf, setLevel } from '../identity/index.js';
 import { manifestView, proposeSkills } from '../manifest/index.js';
 import { importProject, refreshProject } from '../projects/application.js';
 import { evaluateReleases, listReleases, requestRollback } from '../releases/index.js';
@@ -21,7 +22,7 @@ export interface McpDeps extends LaunchDeps, UsageDeps {
 
 const INSTRUCTIONS = `Pono is the person's workshop: their projects, what their subscriptions cost, a server for each
 project, and releases that obey the rule they chose. When the person says « launch a project with
-Pono » call launch_project (suggest a template from list_templates first). When they say « let's
+Pono », call get_profile and follow its guidance, then launch_project (suggest a template from list_templates first). When they say « let's
 continue X », or « continue this project » inside a folder, call find_project with the name, or with
 the folder's git remote as repository, then resume_project. A repository Pono does not know yet, in any
 technology, joins with adopt_project. If find_project answers ambiguous, ask
@@ -90,6 +91,35 @@ function buildServer(deps: McpDeps, actor: Actor, scope: 'read' | 'act'): McpSer
             new AppError('agent.scope_insufficient', 403, 'This agent may only read.'),
           ),
         );
+
+  server.registerTool(
+    'get_profile',
+    {
+      description:
+        'How much the person wants to decide, and how to talk to them. Call it first in a conversation about a new project.',
+      annotations: read,
+    },
+    async () =>
+      guard(async () => {
+        const level = await levelOf(deps.pool, actor.personId);
+        return { login: actor.login, level, guidance: LEVEL_GUIDANCE[level ?? 'unknown'] };
+      }),
+  );
+
+  server.registerTool(
+    'set_level',
+    {
+      description:
+        'Saves how much the person wants to decide, as they said it: guided (do it all for me), choosing (a few options), expert (my own technology).',
+      inputSchema: { level: z.enum(LEVELS) },
+      annotations: act,
+    },
+    async ({ level }) =>
+      acting(async () => {
+        await setLevel(deps.pool, actor.personId, level);
+        return { level, guidance: LEVEL_GUIDANCE[level] };
+      }),
+  );
 
   server.registerTool(
     'list_projects',

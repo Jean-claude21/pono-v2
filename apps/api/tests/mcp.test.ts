@@ -225,3 +225,25 @@ describe('Pono over MCP (phase 3)', () => {
     await expect(agent(b.token)).rejects.toThrow();
   });
 });
+
+describe('the person’s level (D-015)', () => {
+  it('is asked once, saved by the console or the agent, and guides the agent', async () => {
+    const { cookie, token } = await workshop('act');
+    expect((await (await call(t, cookie, '/v1/me')).json()).person.level).toBeNull();
+    const client = await agent(token);
+    const unknown = (await tool(client, 'get_profile')).body;
+    expect(unknown.level).toBeNull();
+    expect(unknown.guidance).toContain('set_level');
+    const saved = (await tool(client, 'set_level', { level: 'guided' })).body;
+    expect(saved.guidance).toContain('never about technology');
+    expect((await (await call(t, cookie, '/v1/me')).json()).person.level).toBe('guided');
+    expect(
+      (await call(t, cookie, '/v1/me/level', { method: 'PUT', body: { level: 'expert' } })).status,
+    ).toBe(204);
+    expect((await tool(client, 'get_profile')).body.level).toBe('expert');
+    expect(
+      (await call(t, cookie, '/v1/me/level', { method: 'PUT', body: { level: 'boss' } })).status,
+    ).toBe(400);
+    await client.close();
+  });
+});

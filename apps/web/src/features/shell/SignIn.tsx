@@ -15,10 +15,16 @@ export function SignIn() {
           {m.signin_title()}
         </h1>
         <p className="soft mt-sm">{m.signin_body()}</p>
+        <p className="mute small mt-sm">{m.signin_why_github()}</p>
         <div className="stack mt-lg">
           {list.includes('github') && (
             <a className="btn btn-primary" href="/auth/sign-in/github">
               {m.signin_github()}
+            </a>
+          )}
+          {list.includes('github') && (
+            <a className="small" href="https://github.com/signup" target="_blank" rel="noreferrer">
+              {m.signin_no_github()}
             </a>
           )}
           {list.includes('dev') && (
