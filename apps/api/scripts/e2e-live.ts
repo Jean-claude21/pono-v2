@@ -125,7 +125,7 @@ const text = async (name: string, args: Record<string, unknown> = {}) => {
   const res = (await client.callTool({ name, arguments: args })) as { content: { text: string }[] };
   return JSON.parse(res.content[0]!.text) as Record<string, unknown>;
 };
-const byName = await text('find_project', { query: 'on continue lectio' === 'x' ? '' : 'lectio' });
+const byName = await text('find_project', { query: 'lectio' });
 log('find_project « lectio »', {
   kind: byName.kind,
   project: (byName.project as { name?: string } | undefined)?.name,
