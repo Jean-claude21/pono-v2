@@ -1,0 +1,14 @@
+node_modules/
+dist/
+.output/
+.tanstack/
+.vinxi/
+coverage/
+*.log
+.env
+.env.*
+!.env.example
+.pono-test-db/
+apps/web/src/paraglide/
+test-results/
+playwright-report/
