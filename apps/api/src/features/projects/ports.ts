@@ -16,11 +16,24 @@ export interface CodeHost {
   readonly id: string;
   listRepositories(credential: string): Promise<Repository[]>;
   repository(credential: string, fullName: string): Promise<Repository | null>;
-  /** Creates a repository in the person's own account, with its first files (phase 6). */
+  /**
+   * Creates a repository in the person's own account, with its first files (phase 6); generated
+   * from a starter template repository when one is named (D-016).
+   */
   createRepository(
     credential: string,
-    input: { name: string; private: boolean; description: string; files: Record<string, string> },
+    input: {
+      name: string;
+      private: boolean;
+      description: string;
+      files: Record<string, string>;
+      starter?: string;
+    },
   ): Promise<Repository>;
+  /** The file names of a folder at a ref; empty when the folder does not exist. */
+  listDirectory(credential: string, fullName: string, path: string, ref: string): Promise<string[]>;
+  /** Lets the repository serve as a starter that other repositories are generated from. */
+  markAsTemplate(credential: string, fullName: string): Promise<void>;
   /** Open proposals (pull requests) towards the default branch (phase 5). */
   listProposals(credential: string, fullName: string, base: string): Promise<Proposal[]>;
   proposalFiles(credential: string, fullName: string, number: number): Promise<ChangedFile[]>;

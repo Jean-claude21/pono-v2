@@ -3,7 +3,7 @@ import { z } from 'zod';
 import type { Actor, AppEnv } from '../../platform/context.js';
 import { withOrganization, type Client } from '../../platform/db.js';
 import { AppError } from '../../platform/errors.js';
-import type { Catalog } from '../catalog/index.js';
+import { catalogFor, type Catalog } from '../catalog/index.js';
 import { activeCredentials } from '../connections/index.js';
 import { record } from '../journal/index.js';
 import type { ProjectsDeps } from '../projects/application.js';
@@ -70,23 +70,23 @@ async function codeHost(deps: ManifestDeps, organizationId: string) {
   throw new AppError('connection.code_host_missing', 409, 'Connect your code host first.');
 }
 
-function templateSkills(deps: ManifestDeps, template: string | null): string[] {
-  return deps.catalog.templates.find((t) => t.id === template)?.skills ?? [];
+function templateSkills(catalog: Catalog, template: string | null): string[] {
+  return catalog.templates.find((t) => t.id === template)?.skills ?? [];
 }
 
 /** The skills of a project, as its manifest and its origin decide them. */
-export function skillsOf(deps: { catalog: Catalog }, row: ProjectRow): SkillChoice[] {
+export function skillsOf(catalog: Catalog, row: ProjectRow): SkillChoice[] {
   return resolveSkills(
-    deps.catalog.skills,
+    catalog.skills,
     row.origin,
-    deps.catalog.templates.find((t) => t.id === row.template)?.skills ?? [],
+    templateSkills(catalog, row.template),
     row.manifest?.skills,
   );
 }
 
 /** What a project's draft manifest would be, from what the repository and providers already say. */
 async function draftManifest(
-  deps: ManifestDeps,
+  catalog: Catalog,
   row: ProjectRow,
   read: (path: string) => Promise<string | null>,
 ): Promise<Manifest> {
@@ -119,10 +119,10 @@ async function draftManifest(
   if (row.template) manifest.template = row.template;
   // An adopted project gets the safety skills written down; the rest stays the person's choice.
   manifest.skills = {
-    use: deps.catalog.skills
+    use: catalog.skills
       .filter((s) =>
         row.origin === 'template'
-          ? templateSkills(deps, row.template).includes(s.name)
+          ? templateSkills(catalog, row.template).includes(s.name)
           : s.family === 'safety',
       )
       .map((s) => s.name),
@@ -142,7 +142,7 @@ export interface ManifestView {
   skills: SkillChoice[];
 }
 
-function view(deps: { catalog: Catalog }, row: ProjectRow): ManifestView {
+function view(catalog: Catalog, row: ProjectRow): ManifestView {
   return {
     status: row.manifest_status,
     manifest: row.manifest,
@@ -151,7 +151,7 @@ function view(deps: { catalog: Catalog }, row: ProjectRow): ManifestView {
     readAt: row.manifest_read_at?.toISOString() ?? null,
     origin: row.origin,
     template: row.template,
-    skills: skillsOf(deps, row),
+    skills: skillsOf(catalog, row),
   };
 }
 
@@ -165,6 +165,7 @@ export async function syncManifest(
   projectId: string,
   options: { propose: boolean } = { propose: true },
 ): Promise<ManifestView> {
+  const catalog = await catalogFor(deps.pool, deps.catalog, actor.organizationId);
   const row = await withOrganization(deps.pool, actor.organizationId, (c) => project(c, projectId));
   const { host, credential } = await codeHost(deps, actor.organizationId);
   const read = (path: string) => host.fileAt(credential, row.repository, path, row.default_branch);
@@ -176,7 +177,7 @@ export async function syncManifest(
     await withOrganization(deps.pool, actor.organizationId, (c) =>
       c.query("UPDATE projects SET manifest_status = 'unknown' WHERE id = $1", [projectId]),
     );
-    return view(deps, { ...row, manifest_status: 'unknown' });
+    return view(catalog, { ...row, manifest_status: 'unknown' });
   }
 
   if (content !== null) {
@@ -215,7 +216,7 @@ export async function syncManifest(
           detail: next.problems ? { problems: next.problems.length } : {},
         });
     });
-    return view(deps, {
+    return view(catalog, {
       ...row,
       manifest_status: next.status,
       manifest: next.manifest,
@@ -225,9 +226,9 @@ export async function syncManifest(
     });
   }
 
-  if (row.manifest_status === 'proposed' || !options.propose) return view(deps, row);
+  if (row.manifest_status === 'proposed' || !options.propose) return view(catalog, row);
 
-  const manifest = await draftManifest(deps, row, read);
+  const manifest = await draftManifest(catalog, row, read);
   const proposal = await host.proposeFiles(credential, row.repository, {
     base: row.default_branch,
     branch: ADOPTION_BRANCH,
@@ -254,7 +255,7 @@ export async function syncManifest(
       detail: { number: proposal.number },
     });
   });
-  return view(deps, {
+  return view(catalog, {
     ...row,
     manifest_status: 'proposed',
     manifest,
@@ -269,7 +270,8 @@ export async function proposeSkills(
   projectId: string,
   change: { use: string[]; off: string[] },
 ): Promise<{ url: string }> {
-  const known = new Set(deps.catalog.skills.map((s) => s.name));
+  const catalog = await catalogFor(deps.pool, deps.catalog, actor.organizationId);
+  const known = new Set(catalog.skills.map((s) => s.name));
   const unknown = [...change.use, ...change.off].filter((n) => !known.has(n));
   if (unknown.length)
     throw new AppError('skill.not_found', 404, 'No such skill.', { skills: unknown });
@@ -277,7 +279,7 @@ export async function proposeSkills(
   const { host, credential } = await codeHost(deps, actor.organizationId);
   const base =
     row.manifest ??
-    (await draftManifest(deps, row, (path) =>
+    (await draftManifest(catalog, row, (path) =>
       host.fileAt(credential, row.repository, path, row.default_branch),
     ));
   const use = new Set([...(base.skills?.use ?? []), ...change.use]);
@@ -322,8 +324,9 @@ export async function manifestView(
   actor: Actor,
   projectId: string,
 ): Promise<ManifestView> {
+  const catalog = await catalogFor(deps.pool, deps.catalog, actor.organizationId);
   return withOrganization(deps.pool, actor.organizationId, async (c) =>
-    view(deps, await project(c, projectId)),
+    view(catalog, await project(c, projectId)),
   );
 }
 

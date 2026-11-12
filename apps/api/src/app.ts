@@ -66,7 +66,7 @@ export function createApp(appDeps: AppDeps): Hono<AppEnv> {
   );
   v1.route('/', serverRoutes(deps));
   v1.route('/', releaseRoutes(deps));
-  v1.route('/catalog', catalogRoutes(deps.catalog));
+  v1.route('/catalog', catalogRoutes(deps));
   v1.route('/launch', launchRoutes(deps));
   v1.route('/agents', agentRoutes(deps));
   v1.route('/plan', planRoutes(deps));
