@@ -3,6 +3,15 @@ import { getLocale } from '@/paraglide/runtime.js';
 
 /** Stable codes from the API, translated here (D-009). An unknown code shows as it is. */
 const tables: Record<string, Record<string, () => string>> = {
+  devPhase: {
+    absent: m.dev_phase_absent,
+    installing: m.dev_phase_installing,
+    install_failed: m.dev_phase_install_failed,
+    starting: m.dev_phase_starting,
+    running: m.dev_phase_running,
+    crashed: m.dev_phase_crashed,
+    stopped: m.dev_phase_stopped,
+  },
   visitsGap: {
     not_linked: m.visits_gap_not_linked,
     not_connected: m.visits_gap_not_connected,
@@ -105,6 +114,11 @@ const tables: Record<string, Record<string, () => string>> = {
   },
   env: { production: m.env_production, preview: m.env_preview },
   action: {
+    'dev.started': m.action_dev_started,
+    'dev.stopped': m.action_dev_stopped,
+    'dev.pulled': m.action_dev_pulled,
+    'dev.pushed': m.action_dev_pushed,
+    'dev.push_refused': m.action_dev_push_refused,
     'variable.set': m.action_variable_set,
     'variable.removed': m.action_variable_removed,
     'variable.requested': m.action_variable_requested,
@@ -184,6 +198,12 @@ const tables: Record<string, Record<string, () => string>> = {
     account: m.meter_account,
   },
   error: {
+    'dev.no_server': m.error_dev_no_server,
+    'dev.server_asleep': m.error_dev_server_asleep,
+    'dev.unknown': m.error_dev_unknown,
+    'dev.clone_failed': m.error_dev_clone_failed,
+    'dev.pull_failed': m.error_dev_pull_failed,
+    'dev.push_failed': m.error_dev_push_failed,
     'variables.person_only': m.error_variables_person_only,
     'variable.invalid_name': m.error_variable_invalid_name,
     'oauth.unknown_client': m.error_oauth_unknown_client,

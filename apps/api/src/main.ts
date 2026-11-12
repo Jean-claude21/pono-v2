@@ -107,6 +107,7 @@ const deps: AppDeps = {
   ...(config.AGENT37_API_KEY
     ? { serverAccount: agent37Account({ apiKey: config.AGENT37_API_KEY, fetch }) }
     : {}),
+  ...(config.PONO_WEBHOOK_SECRET ? { webhookSecret: config.PONO_WEBHOOK_SECRET } : {}),
   now: () => new Date(),
 };
 const app = createApp(deps);

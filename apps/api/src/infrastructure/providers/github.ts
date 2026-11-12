@@ -148,6 +148,12 @@ export function githubCodeHost(fetchImpl: Fetch): CodeHost & Connectable {
         throw error;
       }
     },
+    gitAccess(token, fullName) {
+      return {
+        url: `https://github.com/${fullName}.git`,
+        header: `AUTHORIZATION: basic ${Buffer.from(`x-access-token:${token}`).toString('base64')}`,
+      };
+    },
     async markAsTemplate(token, fullName) {
       await fetchJson(fetchImpl, {
         provider: ID,

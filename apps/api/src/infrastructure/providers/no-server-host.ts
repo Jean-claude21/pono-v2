@@ -13,5 +13,9 @@ export function unavailableServerHost(): ProjectServerHost {
     sleep: refuse,
     wake: refuse,
     destroy: refuse,
+    run: refuse,
+    start: refuse,
+    publishPort: refuse,
+    publicHostSuffix: null,
   };
 }

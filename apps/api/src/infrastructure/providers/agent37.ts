@@ -106,6 +106,35 @@ export function agent37Host(options: {
     async wake(externalId) {
       await call(`/instances/${externalId}/start`, 'POST');
     },
+    publicHostSuffix: '.agent37.app',
+    async run(externalId, command) {
+      const answer = await call<{ exit_code: number; stdout: string; stderr: string }>(
+        `/instances/${externalId}/exec`,
+        'POST',
+        { command },
+      );
+      return { exitCode: answer.exit_code, stdout: answer.stdout, stderr: answer.stderr };
+    },
+    async start(externalId, command) {
+      return call<{ pid: number }>(`/instances/${externalId}/exec`, 'POST', {
+        command,
+        background: true,
+        name: 'pono-dev',
+      });
+    },
+    async publishPort(externalId, port, label) {
+      const listed = await call<
+        { port: number; url: string }[] | { public_ports?: { port: number; url: string }[] }
+      >(`/instances/${externalId}/public-ports`);
+      const ports = Array.isArray(listed) ? listed : (listed.public_ports ?? []);
+      const known = ports.find((p) => p.port === port);
+      if (known) return { url: known.url };
+      const opened = await call<{ url: string }>(`/instances/${externalId}/public-ports`, 'POST', {
+        port,
+        label: label.slice(0, 40),
+      });
+      return { url: opened.url };
+    },
     async destroy(externalId) {
       try {
         await call(`/instances/${externalId}`, 'DELETE');
