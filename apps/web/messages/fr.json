@@ -375,5 +375,6 @@
   "error_catalog_safety_reserved": "Les skills de sûreté sont ceux de Pono.",
   "error_catalog_name_taken": "Ce nom est déjà pris dans le catalogue.",
   "error_catalog_unreadable": "Le dépôt ne se lit pas comme un template (pono-template.yaml).",
-  "error_catalog_not_found": "Rien de tel dans ton catalogue."
+  "error_catalog_not_found": "Rien de tel dans ton catalogue.",
+  "admin_catalog_placeholder": "propriétaire/dépôt"
 }

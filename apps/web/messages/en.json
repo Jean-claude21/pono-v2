@@ -375,5 +375,6 @@
   "error_catalog_safety_reserved": "Safety skills are Pono’s own.",
   "error_catalog_name_taken": "That name is taken in the catalog.",
   "error_catalog_unreadable": "The repository does not read as a template (pono-template.yaml).",
-  "error_catalog_not_found": "Nothing like that in your catalog."
+  "error_catalog_not_found": "Nothing like that in your catalog.",
+  "admin_catalog_placeholder": "owner/repository"
 }
