@@ -115,5 +115,13 @@ export function netlifyHosting(fetchImpl: Fetch): Hosting & Connectable {
         createdAt: new Date(d.created_at),
       }));
     },
+    async rollback(token, ref) {
+      await fetchJson(fetchImpl, {
+        provider: ID,
+        url: `${API}/sites/${ref}/rollback`,
+        method: 'PUT',
+        headers: headers(token),
+      });
+    },
   };
 }

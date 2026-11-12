@@ -10,6 +10,7 @@ import {
 } from './features/identity/index.js';
 import { launchRoutes } from './features/launch/index.js';
 import { projectRoutes, type WorkshopAdapters } from './features/projects/index.js';
+import { releaseRoutes } from './features/releases/index.js';
 import { serverRoutes, serversUsage, type ProjectServerHost } from './features/servers/index.js';
 import { usageRoutes, type InternalUsage, type UsageSource } from './features/usage/index.js';
 import type { AppEnv } from './platform/context.js';
@@ -50,6 +51,7 @@ export function createApp(deps: AppDeps): Hono<AppEnv> {
     usageRoutes({ ...deps, internalUsage: [...(deps.internalUsage ?? []), serversUsage()] }),
   );
   v1.route('/', serverRoutes(deps));
+  v1.route('/', releaseRoutes(deps));
   v1.route('/catalog', catalogRoutes(deps.catalog));
   v1.route('/launch', launchRoutes(deps));
   app.route('/v1', v1);

@@ -1,5 +1,6 @@
 import type { Connectable } from '../../features/connections/index.js';
-import type { CodeHost, Repository } from '../../features/projects/index.js';
+import type { CodeHost, Proposal, Repository } from '../../features/projects/index.js';
+import type { ChangedFile } from '../../features/releases/guards.js';
 import { fetchJson, ProviderError, type Fetch } from '../../platform/http.js';
 
 const ID = 'github';
@@ -91,6 +92,96 @@ export function githubCodeHost(fetchImpl: Fetch): CodeHost & Connectable {
         });
       }
       return repository(created);
+    },
+    async listProposals(token, fullName, base) {
+      const pulls = await fetchJson<
+        { number: number; title: string; html_url: string; head: { sha: string; ref: string } }[]
+      >(fetchImpl, {
+        provider: ID,
+        url: `${API}/repos/${fullName}/pulls?state=open&base=${encodeURIComponent(base)}&per_page=50`,
+        headers: headers(token),
+      });
+      return pulls.map((p): Proposal => ({
+        number: p.number,
+        title: p.title,
+        headSha: p.head.sha,
+        branch: p.head.ref,
+        url: p.html_url,
+      }));
+    },
+    async proposalFiles(token, fullName, number) {
+      const files = await fetchJson<
+        { filename: string; status: string; patch?: string; changes: number }[]
+      >(fetchImpl, {
+        provider: ID,
+        url: `${API}/repos/${fullName}/pulls/${number}/files?per_page=100`,
+        headers: headers(token),
+      });
+      return files.map((f): ChangedFile => ({
+        path: f.filename,
+        status:
+          f.status === 'removed'
+            ? 'removed'
+            : f.status === 'added'
+              ? 'added'
+              : f.status === 'renamed'
+                ? 'renamed'
+                : 'modified',
+        patch: f.patch ?? (f.changes === 0 ? '' : null),
+        binary: f.patch === undefined && f.changes === 0,
+      }));
+    },
+    async fileAt(token, fullName, path, ref) {
+      try {
+        const file = await fetchJson<{ content?: string; encoding?: string }>(fetchImpl, {
+          provider: ID,
+          url: `${API}/repos/${fullName}/contents/${path}?ref=${encodeURIComponent(ref)}`,
+          headers: headers(token),
+        });
+        return file.content ? Buffer.from(file.content, 'base64').toString('utf8') : null;
+      } catch (error) {
+        if (error instanceof ProviderError && error.status === 404) return null;
+        throw error;
+      }
+    },
+    async setReleaseStatus(token, fullName, sha, state, description) {
+      await fetchJson(fetchImpl, {
+        provider: ID,
+        url: `${API}/repos/${fullName}/statuses/${sha}`,
+        method: 'POST',
+        headers: headers(token),
+        body: { state, context: 'pono/release', description: description.slice(0, 140) },
+      });
+    },
+    async merge(token, fullName, number, sha) {
+      await fetchJson(fetchImpl, {
+        provider: ID,
+        url: `${API}/repos/${fullName}/pulls/${number}/merge`,
+        method: 'PUT',
+        headers: headers(token),
+        body: { sha, merge_method: 'squash' },
+      });
+    },
+    async protect(token, fullName, branch) {
+      try {
+        await fetchJson(fetchImpl, {
+          provider: ID,
+          url: `${API}/repos/${fullName}/branches/${encodeURIComponent(branch)}/protection`,
+          method: 'PUT',
+          headers: headers(token),
+          body: {
+            required_status_checks: { strict: false, contexts: ['pono/release'] },
+            enforce_admins: true,
+            required_pull_request_reviews: null,
+            restrictions: null,
+          },
+        });
+        return 'protected';
+      } catch (error) {
+        // Branch protection on a private repository needs a paid plan (D-004 of the first Pono).
+        if (error instanceof ProviderError && error.status === 403) return 'unavailable_on_plan';
+        throw error;
+      }
     },
     async repository(token, fullName) {
       try {

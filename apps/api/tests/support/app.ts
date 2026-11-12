@@ -13,6 +13,8 @@ import type {
   LinkChecker,
   Repository,
 } from '../../src/features/projects/index.js';
+import type { ChangedFile } from '../../src/features/releases/guards.js';
+import type { Proposal } from '../../src/features/projects/ports.js';
 import type { HostedServer, ProjectServerHost } from '../../src/features/servers/index.js';
 import type { Reading, UsageSource } from '../../src/features/usage/index.js';
 import { createPool, type Pool } from '../../src/platform/db.js';
@@ -79,6 +81,11 @@ export function fakeServerHost(w: World): ProjectServerHost {
 }
 
 export interface World {
+  proposals: Map<string, Proposal[]>;
+  proposalFiles: Map<string, ChangedFile[]>;
+  statuses: { fullName: string; sha: string; state: string }[];
+  merged: string[];
+  rollbacks: string[];
   files: Map<string, Record<string, string>>;
   servers: Map<string, HostedServer & { env: Record<string, string> }>;
   usage: Reading[] | null;
@@ -94,6 +101,11 @@ export interface World {
 export function world(): World {
   return {
     usage: [],
+    proposals: new Map(),
+    proposalFiles: new Map(),
+    statuses: [],
+    merged: [],
+    rollbacks: [],
     files: new Map(),
     servers: new Map(),
     repositories: [],
@@ -128,6 +140,31 @@ export function fakeAdapters(w: World): AppDeps['adapters'] {
       w.files.set(repository.fullName, input.files);
       return repository;
     },
+    async listProposals(_c, fullName) {
+      return w.proposals.get(fullName) ?? [];
+    },
+    async proposalFiles(_c, fullName, number) {
+      return w.proposalFiles.get(`${fullName}#${number}`) ?? [];
+    },
+    async fileAt(_c, fullName, path) {
+      return w.files.get(fullName)?.[path] ?? null;
+    },
+    async setReleaseStatus(_c, fullName, sha, state) {
+      w.statuses.push({ fullName, sha, state });
+    },
+    async merge(_c, fullName, number, sha) {
+      const open = w.proposals.get(fullName) ?? [];
+      const proposal = open.find((x) => x.number === number);
+      if (!proposal || proposal.headSha !== sha) throw new ProviderError('code', 409, 'head moved');
+      w.merged.push(`${fullName}#${number}@${sha}`);
+      w.proposals.set(
+        fullName,
+        open.filter((x) => x.number !== number),
+      );
+    },
+    async protect(_c, fullName) {
+      return fullName.includes('private') ? 'unavailable_on_plan' : 'protected';
+    },
     async repository(credential, fullName) {
       w.seen.push(credential);
       return w.repositories.find((r) => r.fullName === fullName) ?? null;
@@ -144,6 +181,9 @@ export function fakeAdapters(w: World): AppDeps['adapters'] {
     },
     async deployments(_credential, ref) {
       return w.deployments.get(ref) ?? [];
+    },
+    async rollback(_credential, ref) {
+      w.rollbacks.push(ref);
     },
   };
   const database: Database = {

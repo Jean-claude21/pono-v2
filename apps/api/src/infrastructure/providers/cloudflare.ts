@@ -119,5 +119,22 @@ export function cloudflareHosting(fetchImpl: Fetch): Hosting & Connectable {
         createdAt: new Date(d.created_on),
       }));
     },
+    async rollback(credential, ref) {
+      const { token, accountId } = parse(credential);
+      const deployments = await get<PagesDeployment[]>(
+        token,
+        `/accounts/${accountId}/pages/projects/${ref}/deployments`,
+      );
+      const previous = deployments.filter(
+        (d) => d.environment === 'production' && deploymentStatus(d.latest_stage) === 'succeeded',
+      )[1];
+      if (!previous) throw new ProviderError(ID, 409, 'No previous production deployment.');
+      await fetchJson(fetchImpl, {
+        provider: ID,
+        url: `${API}/accounts/${accountId}/pages/projects/${ref}/deployments/${previous.id}/rollback`,
+        method: 'POST',
+        headers: headers(token),
+      });
+    },
   };
 }
