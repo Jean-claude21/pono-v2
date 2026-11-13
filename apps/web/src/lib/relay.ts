@@ -1,6 +1,6 @@
 /**
- * The console is the browser's and the agents' only origin: `/auth/*`, `/v1/*` and `/mcp` go to the API
- * as they are, so the
+ * The console is the browser's, the agents' and the providers' only origin: `/auth/*`, `/v1/*`,
+ * `/mcp`, and the signed webhooks (`/hooks/*`, `/billing/webhook`) go to the API as they are, so the
  * session cookie is the console's own (SameSite=Lax, HttpOnly).
  */
 const API_URL = process.env.PONO_API_URL ?? 'http://localhost:8787';
@@ -11,7 +11,9 @@ export function isApiPath(pathname: string): boolean {
     pathname.startsWith('/v1/') ||
     pathname.startsWith('/oauth/') ||
     pathname.startsWith('/.well-known/oauth-') ||
-    pathname === '/mcp'
+    pathname === '/mcp' ||
+    pathname.startsWith('/hooks/') ||
+    pathname === '/billing/webhook'
   );
 }
 
