@@ -67,13 +67,14 @@ export function agent37Host(options: {
   region?: 'us' | 'eu';
 }): ProjectServerHost {
   const headers = { authorization: `Bearer ${options.apiKey}` };
-  const call = <T>(path: string, method = 'GET', body?: unknown) =>
+  const call = <T>(path: string, method = 'GET', body?: unknown, timeoutMs?: number) =>
     fetchJson<T>(options.fetch, {
       provider: ID,
       url: `${API}${path}`,
       method,
       headers,
       ...(body === undefined ? {} : { body }),
+      ...(timeoutMs ? { timeoutMs } : {}),
     });
 
   return {
@@ -107,11 +108,12 @@ export function agent37Host(options: {
       await call(`/instances/${externalId}/start`, 'POST');
     },
     publicHostSuffix: '.agent37.app',
-    async run(externalId, command) {
+    async run(externalId, command, runOptions) {
       const answer = await call<{ exit_code: number; stdout: string; stderr: string }>(
         `/instances/${externalId}/exec`,
         'POST',
         { command },
+        runOptions?.timeoutMs,
       );
       return { exitCode: answer.exit_code, stdout: answer.stdout, stderr: answer.stderr };
     },

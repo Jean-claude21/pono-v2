@@ -1,7 +1,8 @@
 import { createFileRoute } from '@tanstack/react-router';
 import { Shell } from '@/features/shell/Shell';
+import { Start } from '@/features/start/Start';
 import { Card, Icon, PageHead, StateDot, Stats, Thin, toneOf } from '@/features/shell/ui';
-import { useApi, type Me, type ProjectView } from '@/lib/api';
+import { useApi, type ConnectionView, type Me, type ProjectView } from '@/lib/api';
 import { ago, label, money } from '@/lib/labels';
 import { alertText, type UsageView } from '@/lib/usage';
 import * as m from '@/paraglide/messages.js';
@@ -40,6 +41,7 @@ function Overview() {
   const projects = useApi<{ projects: ProjectView[] }>('/v1/projects');
   const servers = useApi<ServersView>('/v1/servers');
   const usage = useApi<UsageView>('/v1/usage');
+  const connections = useApi<{ connections: ConnectionView[] }>('/v1/connections');
   const guided = me.result?.ok ? me.result.data.person.level === 'guided' : false;
 
   const list = projects.result?.ok ? projects.result.data.projects : [];
@@ -64,6 +66,13 @@ function Overview() {
           </>
         }
       />
+
+      {projects.result?.ok && connections.result?.ok && (
+        <Start
+          hasCodeHost={connections.result.data.connections.some((c) => c.kind === 'code_host')}
+          projects={list.length}
+        />
+      )}
 
       {projects.result?.ok &&
         (first ? (

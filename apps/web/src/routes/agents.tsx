@@ -2,6 +2,7 @@ import { createFileRoute } from '@tanstack/react-router';
 import { useState, type FormEvent } from 'react';
 import { Shell } from '@/features/shell/Shell';
 import { Card, PageHead, StateDot } from '@/features/shell/ui';
+import { ConnectAgent } from '@/features/start/Start';
 import { api, useApi } from '@/lib/api';
 import { ago, label } from '@/lib/labels';
 import * as m from '@/paraglide/messages.js';
@@ -36,6 +37,12 @@ const CAN: readonly { title: () => string; body: () => string; tools: string }[]
     title: m.agents_can_dev,
     body: m.agents_can_dev_body,
     tools: 'start_dev · dev_status · pull_changes · push_changes · check_secrets',
+  },
+  {
+    title: m.agents_can_code,
+    body: m.agents_can_code_body,
+    tools:
+      'list_files · search_code · read_file · edit_file · write_file · run_command · show_changes',
   },
   {
     title: m.agents_can_release,
@@ -107,21 +114,8 @@ function Agents() {
         </div>
       )}
 
-      <Card title={m.agents_how_title()} icon="list">
-        <ol className="how">
-          <li>
-            <strong>{m.agents_how_1()}</strong>
-            {m.agents_how_1_body()}
-          </li>
-          <li>
-            <strong>{m.agents_how_2()}</strong>
-            {m.agents_how_2_body()}
-          </li>
-          <li>
-            <strong>{m.agents_how_3()}</strong>
-            {m.agents_how_3_body()}
-          </li>
-        </ol>
+      <Card title={m.agents_connect_title()} icon="plug">
+        <ConnectAgent />
       </Card>
 
       <div className="grid-cards two">
@@ -171,7 +165,7 @@ function Agents() {
           </ul>
         </Card>
 
-        <Card title={m.agents_give()} icon="key">
+        <Card title={m.connect_manual()} icon="key">
           <form className="form" style={{ marginTop: 0 }} onSubmit={give}>
             <div className="field">
               <label htmlFor="agent-name">{m.agents_name()}</label>
