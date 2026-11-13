@@ -329,3 +329,33 @@ le Coolify de l'auteur, base sur Neon.
 l'atelier dessinée avec les pièces de la console (le verdict en tête), ce que Pono fait, trois
 étapes, les agents, les tarifs, les questions. Aucune image générée : l'atelier lui-même est la
 meilleure illustration, et le système reste sans couleur de marque.
+
+## D-026 — Aucune question avant la console
+
+**Tranché le 2026-11-13**, précise D-022 et la phase 9.
+
+Après la connexion GitHub, la personne arrive directement dans sa console. Son niveau reste vide
+tant qu'elle ne l'a pas choisi dans les réglages ; l'agent, lui, le demande une fois dans la
+conversation et l'enregistre (`set_level`). La vue d'ensemble guide en trois étapes jusqu'à l'agent
+relié (D-027), sans jamais bloquer.
+
+## D-027 — Coder depuis n'importe quel chat : l'agent écrit sur le serveur du projet
+
+**Tranché le 2026-11-13**, accomplit la phase 4 de la première version (« écrire depuis son agent,
+sans poste local ») et complète D-020.
+
+Le serveur MCP offre la main qui écrit, sur le serveur du projet seulement : `list_files`,
+`search_code`, `read_file` (lignes numérotées, par plages), `edit_file` (remplacements exacts, tout
+ou rien, diff, essai à blanc), `write_file`, `move_file`, `delete_file`, `show_changes`,
+`run_command` (borné dans le temps, en fond avec `command_output`). Modelés sur les outils que les
+agents connaissent déjà (Claude Code, le serveur de fichiers MCP, Desktop Commander). Les chemins
+restent dans le dépôt, hors `.git`, `node_modules` et `.pono` ; toute écriture et toute commande
+sont au journal ; aucune sortie ne porte une valeur de développement ; écrire exige « Lecture et
+actions ». La production reste derrière la proposition et la règle du projet.
+
+On relie un agent en collant l'adresse MCP de Pono dans Claude ou ChatGPT : OAuth fait le reste,
+sans clé. Claude Code passe aussi par OAuth ; seul Codex prend une clé d'accès. Le positionnement
+devient : _code depuis n'importe quel chat, ton agent a un serveur pour chaque projet_.
+
+**Ce que ça coûte.** Un agent de chat convient aux changements courants ; un gros chantier reste
+plus à l'aise dans Claude Code sur une machine. Les deux chemins mènent au même serveur et à `dev`.

@@ -23,8 +23,20 @@ import {
   stopCommand,
   type DevState,
 } from './domain.js';
+import {
+  codeCommand,
+  jobCommand,
+  LIMITS,
+  readCode,
+  readRun,
+  runCommand,
+  safePath,
+  type CodeOp,
+  type RunResult,
+} from './code.js';
 
 export * from './domain.js';
+export * from './code.js';
 
 export type DevLoopDeps = ProjectsDeps & ServersDeps;
 
@@ -289,6 +301,108 @@ export async function pushChanges(
   const commit = out.stdout.trim().split('\n').pop() ?? '';
   await journal(deps, actor, projectId, 'dev.pushed', { commit, files: files.length });
   return { pushed: true, commit, files: files.length };
+}
+
+/** Paths the agent gave, made safe; a path outside the repository is refused, never guessed. */
+function pathOf(path: string): string {
+  const clean = safePath(path);
+  if (!clean)
+    throw new AppError(
+      'code.bad_path',
+      400,
+      'Give a path relative to the repository, without `..`, outside .git and node_modules.',
+    );
+  return clean;
+}
+
+const WRITES = new Set(['edit', 'write', 'move', 'delete']);
+
+/**
+ * One file operation in the project's repository on its server (D-027): read, list, search, edit,
+ * write, move, delete, or the changes so far. Writes are journaled with their paths; nothing that
+ * leaves the server carries a development value.
+ */
+export async function codeOn(
+  deps: DevLoopDeps,
+  actor: Actor,
+  projectId: string,
+  input: CodeOp,
+): Promise<Record<string, unknown>> {
+  const op: CodeOp =
+    'path' in input && input.path !== null ? { ...input, path: pathOf(input.path) } : input;
+  if (op.op === 'move') op.to = pathOf(op.to);
+  if (op.op === 'write' && op.content.length > LIMITS.writeChars)
+    throw new AppError('code.too_large', 413, 'Write large files in several smaller parts.');
+  const t = await target(deps, actor, projectId);
+  const out = await deps.serverHost.run(t.externalId, codeCommand(t.repository, op), {
+    timeoutMs: 60_000,
+  });
+  const answer = readCode(out.stdout);
+  if (answer.error === 'not_ready')
+    throw new AppError(
+      'dev.not_ready',
+      409,
+      'The repository is not on the server yet: call start_dev first.',
+    );
+  if (answer.error === 'no_answer')
+    throw new AppError('code.server_failed', 502, 'The server did not answer.', {
+      output: redact(out.stderr, t.values).slice(-1500),
+    });
+  if (!answer.error && WRITES.has(op.op) && !(op.op === 'edit' && op.dryRun))
+    await journal(deps, actor, projectId, `code.${op.op}`, {
+      path: 'path' in op ? op.path : null,
+      ...(op.op === 'move' ? { to: op.to } : {}),
+    });
+  return JSON.parse(redact(JSON.stringify(answer), t.values)) as Record<string, unknown>;
+}
+
+/**
+ * A shell command in the project's repository on its server (D-027): install a package, run the
+ * tests, build. Bounded in time; in the background, read later with `jobOutput`. The command is
+ * journaled; its output never carries a development value.
+ */
+export async function runOn(
+  deps: DevLoopDeps,
+  actor: Actor,
+  projectId: string,
+  command: string,
+  seconds: number,
+  background: boolean,
+): Promise<RunResult> {
+  const t = await target(deps, actor, projectId);
+  const limit = Math.min(Math.max(1, Math.round(seconds)), LIMITS.seconds);
+  const out = await deps.serverHost.run(
+    t.externalId,
+    runCommand(t.repository, command, limit, background),
+    { timeoutMs: background ? 30_000 : (limit + 30) * 1000 },
+  );
+  const result = readRun(out.stdout);
+  if (!result.ready)
+    throw new AppError(
+      'dev.not_ready',
+      409,
+      'The repository is not on the server yet: call start_dev first.',
+    );
+  await journal(deps, actor, projectId, 'code.run', {
+    command: redact(command, t.values).slice(0, 200),
+    ...(result.job ? { job: result.job } : { exitCode: result.exitCode }),
+  });
+  return { ...result, output: redact(result.output, t.values) };
+}
+
+/** A background command's output so far, and its exit code once it ended. */
+export async function jobOutput(
+  deps: DevLoopDeps,
+  actor: Actor,
+  projectId: string,
+  job: string,
+): Promise<RunResult> {
+  if (!/^\d{6,24}$/.test(job)) throw new AppError('code.no_job', 404, 'No such job.');
+  const t = await target(deps, actor, projectId);
+  const out = await deps.serverHost.run(t.externalId, jobCommand(t.repository, job));
+  const result = readRun(out.stdout);
+  if (!result.ready) throw new AppError('code.no_job', 404, 'No such job.');
+  return { ...result, job, output: redact(result.output, t.values) };
 }
 
 /** `/v1/projects/:id/dev/*`. */

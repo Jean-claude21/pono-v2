@@ -2,7 +2,6 @@ import { useEffect, useState, type ReactNode } from 'react';
 import { api, useApi, type Me } from '@/lib/api';
 import { label } from '@/lib/labels';
 import * as m from '@/paraglide/messages.js';
-import { LevelChooser } from './LevelChooser';
 import { LocaleSwitch } from './LocaleSwitch';
 import { Palette, type Destination } from './Palette';
 import { Home } from '@/features/home/Home';
@@ -148,16 +147,8 @@ export function Shell({
     return <p className="page">{label('error', me.result.error.code)}</p>;
   }
   const { person, organization, isAdmin } = me.result.data;
-  if (person.level === null)
-    return (
-      <div className="auth">
-        <div className="auth-box" style={{ maxWidth: 880 }}>
-          <h1>{m.level_title()}</h1>
-          <p className="soft mt-sm">{m.level_body()}</p>
-          <LevelChooser current={null} onChosen={me.reload} />
-        </div>
-      </div>
-    );
+  // No question before the console: the level stays unset until the person sets it in the
+  // settings, or until their agent asks it once in the conversation (LEVEL_GUIDANCE.unknown).
 
   const slots = servers.result?.ok ? servers.result.data : null;
   const workshop: Item[] = [
@@ -238,7 +229,7 @@ export function Shell({
             <span className="avatar">{initials}</span>
             <div className="rail-text" style={{ minWidth: 0 }}>
               <strong>{person.name ?? person.login}</strong>
-              <span>{label('level', person.level)}</span>
+              {person.level && <span>{label('level', person.level)}</span>}
             </div>
           </div>
           <button type="button" className="rail-item" onClick={signOut}>

@@ -32,6 +32,7 @@ export interface ProjectServerHost {
   run(
     externalId: string,
     command: string,
+    options?: { timeoutMs?: number },
   ): Promise<{ exitCode: number; stdout: string; stderr: string }>;
   /** Starts a long command in the background (the project's dev server); answers its process id. */
   start(externalId: string, command: string): Promise<{ pid: number }>;
