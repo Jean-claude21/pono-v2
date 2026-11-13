@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { api, useApi } from '@/lib/api';
 import { label } from '@/lib/labels';
+import { Card } from '@/features/shell/ui';
 import * as m from '@/paraglide/messages.js';
 
 interface DevView {
@@ -28,10 +29,9 @@ export function ProjectDev({ projectId }: Readonly<{ projectId: string }>) {
     const code = data.result.error.code;
     if (code === 'dev.no_server' || code === 'dev.server_asleep')
       return (
-        <section>
-          <h3 className="section-title mono-label">{m.dev_title()}</h3>
+        <Card title={m.dev_title()} icon="code">
           <p className="mute small mt-md">{label('error', code)}</p>
-        </section>
+        </Card>
       );
     return null;
   }
@@ -61,10 +61,11 @@ export function ProjectDev({ projectId }: Readonly<{ projectId: string }>) {
   };
 
   return (
-    <section>
-      <div className="spread">
-        <h3 className="section-title mono-label">{m.dev_title()}</h3>
-        <div className="row">
+    <Card
+      title={m.dev_title()}
+      icon="code"
+      tools={
+        <>
           {dev.phase === 'running' || dev.phase === 'installing' || dev.phase === 'starting' ? (
             <>
               <button
@@ -94,8 +95,9 @@ export function ProjectDev({ projectId }: Readonly<{ projectId: string }>) {
               {m.dev_start()}
             </button>
           )}
-        </div>
-      </div>
+        </>
+      }
+    >
       <dl className="facts mt-md">
         <div className="fact">
           <dt>{m.col_status()}</dt>
@@ -165,6 +167,6 @@ export function ProjectDev({ projectId }: Readonly<{ projectId: string }>) {
           {dev.logs}
         </pre>
       )}
-    </section>
+    </Card>
   );
 }

@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { LimitChooser, type LimitDetail } from '@/features/servers/LimitChooser';
 import { api, useApi } from '@/lib/api';
 import { label, money } from '@/lib/labels';
+import { Card } from '@/features/shell/ui';
 import * as m from '@/paraglide/messages.js';
 
 interface ServerView {
@@ -45,8 +46,7 @@ export function ProjectServer({ projectId }: Readonly<{ projectId: string }>) {
   };
 
   return (
-    <section>
-      <h3 className="section-title mono-label">{m.project_server()}</h3>
+    <Card title={m.project_server()} icon="server">
       {limit && (
         <LimitChooser
           detail={limit.detail}
@@ -104,6 +104,6 @@ export function ProjectServer({ projectId }: Readonly<{ projectId: string }>) {
           </div>
         </div>
       )}
-    </section>
+    </Card>
   );
 }

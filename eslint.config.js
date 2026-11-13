@@ -10,6 +10,7 @@ export default tseslint.config(
       '**/routeTree.gen.ts',
       '**/.tanstack/**',
       'packages/design/**',
+      'design/**',
       '**/src/paraglide/**',
     ],
   },

@@ -12,22 +12,28 @@ const UMAMI_SITE = import.meta.env.VITE_UMAMI_WEBSITE_ID as string | undefined;
 const UMAMI_SCRIPT =
   (import.meta.env.VITE_UMAMI_SCRIPT_URL as string | undefined) ??
   'https://cloud.umami.is/script.js';
+/** Before the first paint, the theme the person chose (D-022); otherwise the computer decides. */
+const THEME =
+  'try{var t=localStorage.getItem("pono-theme");if(t==="light"||t==="dark")document.documentElement.dataset.theme=t}catch(e){}';
 const BEFORE_SEND =
   'window.ponoBeforeSend=function(t,p){return location.pathname.indexOf("/admin")===0?null:p}';
 
 export const Route = createRootRoute({
   head: () => ({
-    scripts: UMAMI_SITE
-      ? [
-          { children: BEFORE_SEND },
-          {
-            src: UMAMI_SCRIPT,
-            defer: true,
-            'data-website-id': UMAMI_SITE,
-            'data-before-send': 'ponoBeforeSend',
-          },
-        ]
-      : [],
+    scripts: [
+      { children: THEME },
+      ...(UMAMI_SITE
+        ? [
+            { children: BEFORE_SEND },
+            {
+              src: UMAMI_SCRIPT,
+              defer: true,
+              'data-website-id': UMAMI_SITE,
+              'data-before-send': 'ponoBeforeSend',
+            },
+          ]
+        : []),
+    ],
     meta: [
       { charSet: 'utf-8' },
       { name: 'viewport', content: 'width=device-width, initial-scale=1' },
@@ -44,9 +50,9 @@ export const Route = createRootRoute({
 });
 
 function Document({ children }: Readonly<{ children: ReactNode }>) {
-  // The console is a control room: dark (D-009).
+  // Light or dark, set before paint by the theme script (D-022).
   return (
-    <html lang={getLocale()} data-theme="console">
+    <html lang={getLocale()} suppressHydrationWarning>
       <head>
         <HeadContent />
       </head>

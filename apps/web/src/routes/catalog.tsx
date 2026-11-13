@@ -5,6 +5,7 @@ import { LimitChooser, type LimitDetail } from '@/features/servers/LimitChooser'
 import { Shell } from '@/features/shell/Shell';
 import { api, useApi } from '@/lib/api';
 import { label } from '@/lib/labels';
+import { Card, PageHead, Segmented } from '@/features/shell/ui';
 import * as m from '@/paraglide/messages.js';
 import { getLocale } from '@/paraglide/runtime.js';
 
@@ -33,64 +34,140 @@ interface Launched {
 
 const AGENTS = ['claude-code', 'codex', 'opencode', 'none'] as const;
 
+type Tab = 'templates' | 'skills' | 'mine';
+
+/**
+ * Templates to start a project and skills the agents follow (D-022): one tab each, the person's
+ * own in a third. Choosing a template opens its launch form at the top.
+ */
 function Catalog() {
   const templates = useApi<{ templates: Template[] }>('/v1/catalog/templates');
   const skills = useApi<{ skills: SkillCard[] }>('/v1/catalog/skills');
   const [chosen, setChosen] = useState<Template | null>(null);
+  const [tab, setTab] = useState<Tab>('templates');
+  const [category, setCategory] = useState('all');
   const locale = getLocale() === 'en' ? 'en' : 'fr';
+  const allTemplates = templates.result?.ok ? templates.result.data.templates : [];
+  const allSkills = skills.result?.ok ? skills.result.data.skills : [];
+  const categories = [...new Set(allTemplates.map((t) => t.category))];
+  const families = [...new Set(allSkills.map((s) => s.family))];
+  const own = allSkills.filter((s) => ['private', 'proposed', 'refused'].includes(s.scope));
+  const tabs: readonly (readonly [Tab, string, number])[] = [
+    ['templates', m.catalog_templates(), allTemplates.length],
+    ['skills', m.catalog_skills(), allSkills.length - own.length],
+    ['mine', m.catalog_own_skills(), own.length],
+  ];
+  const pick = (t: Template) => {
+    setChosen(t);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
   return (
     <>
-      <div className="topline">
-        <div>
-          <h1>{m.catalog_title()}</h1>
-          <p className="mute mt-sm">{m.catalog_intro()}</p>
-        </div>
-      </div>
+      <PageHead title={m.catalog_title()} intro={m.catalog_intro()} />
       {chosen && <Launch template={chosen} locale={locale} onCancel={() => setChosen(null)} />}
-      <h3 className="section-title mono-label">{m.catalog_templates()}</h3>
-      <div className="tiles">
-        {templates.result?.ok &&
-          templates.result.data.templates.map((t) => (
-            <button
-              type="button"
-              className="tile"
-              key={t.id}
-              aria-pressed={chosen?.id === t.id}
-              onClick={() => setChosen(t)}
-            >
-              <span className="mono-label">
-                {label('category', t.category)}
-                {t.scope && t.scope !== 'pono' ? ` · ${label('scope', t.scope)}` : ''}
-              </span>
-              <h4>{t.name[locale]}</h4>
-              <p>{t.description[locale]}</p>
-              <div className="row">
-                {t.stack.map((s) => (
-                  <span className="tag" key={s}>
-                    {s}
-                  </span>
-                ))}
-              </div>
-            </button>
-          ))}
+
+      <div className="filters" role="tablist">
+        {tabs.map(([key, text, count]) => (
+          <button
+            key={key}
+            type="button"
+            role="tab"
+            aria-selected={tab === key}
+            aria-pressed={tab === key}
+            onClick={() => setTab(key)}
+          >
+            {text}
+            <span className="figures">{count}</span>
+          </button>
+        ))}
       </div>
-      <h3 className="section-title mono-label">{m.catalog_skills()}</h3>
-      <table className="table">
-        <tbody>
-          {skills.result?.ok &&
-            skills.result.data.skills.map((s) => (
-              <tr key={s.name}>
-                <td className="project figures">{s.name}</td>
-                <td className="small soft">{s.description}</td>
-                <td className="small mute">
-                  {label('family', s.family)} · {label('scope', s.scope)}
-                </td>
-              </tr>
+
+      {tab === 'templates' && (
+        <>
+          <div className="toolbar">
+            <Segmented
+              label={m.catalog_category()}
+              value={category}
+              onChange={setCategory}
+              options={[
+                ['all', m.projects_filter_all()],
+                ...categories.map((c) => [c, label('category', c)] as const),
+              ]}
+            />
+            <span className="tiny mute">{m.catalog_templates_body()}</span>
+          </div>
+          <div className="grid-cards">
+            {allTemplates
+              .filter((t) => category === 'all' || t.category === category)
+              .map((t) => (
+                <section className="card" key={t.id}>
+                  <span className="mono-label">
+                    {label('category', t.category)}
+                    {t.scope && t.scope !== 'pono' ? ` · ${label('scope', t.scope)}` : ''}
+                  </span>
+                  <h2 className="mt-sm" style={{ fontSize: 16, fontWeight: 600 }}>
+                    {t.name[locale]}
+                  </h2>
+                  <p className="small soft mt-sm">{t.description[locale]}</p>
+                  <div className="row mt-md" style={{ gap: 6 }}>
+                    {t.stack.map((x) => (
+                      <span className="tag" key={x}>
+                        {x}
+                      </span>
+                    ))}
+                  </div>
+                  <div className="tile-foot mt-md">
+                    <span className="tiny mute">
+                      {m.catalog_skills_count({ count: String(t.skills.length) })}
+                    </span>
+                    <button
+                      type="button"
+                      className="btn btn-primary btn-xs"
+                      onClick={() => pick(t)}
+                    >
+                      {m.catalog_use()}
+                    </button>
+                  </div>
+                </section>
+              ))}
+          </div>
+        </>
+      )}
+
+      {tab === 'skills' && (
+        <>
+          <p className="small mute" style={{ marginBottom: 14 }}>
+            {m.catalog_skills_body()}
+          </p>
+          <div className="grid-cards two">
+            {families.map((family) => (
+              <Card key={family} title={label('family', family)} icon="book">
+                <ul className="lines">
+                  {allSkills
+                    .filter((x) => x.family === family && !own.includes(x))
+                    .map((x) => (
+                      <li key={x.name}>
+                        <div className="line-top">
+                          <span className="name figures" style={{ fontWeight: 500 }}>
+                            {x.name}
+                          </span>
+                          <span className="tag">{label('scope', x.scope)}</span>
+                        </div>
+                        <p className="tiny soft">{x.description}</p>
+                      </li>
+                    ))}
+                </ul>
+              </Card>
             ))}
-        </tbody>
-      </table>
-      {skills.result?.ok && (
-        <OwnSkills skills={skills.result.data.skills} onChange={skills.reload} />
+          </div>
+        </>
+      )}
+
+      {tab === 'mine' && (
+        <Card title={m.catalog_own_skills()} icon="book" foot={m.catalog_own_foot()}>
+          <OwnSkills skills={allSkills} onChange={skills.reload} />
+        </Card>
       )}
     </>
   );
@@ -147,7 +224,11 @@ function Launch({
     );
   }
   return (
-    <div className="panel">
+    <Card
+      title={m.launch_title({ name: template.name[locale] })}
+      icon="plus"
+      foot={m.launch_what()}
+    >
       {limit && (
         <LimitChooser
           detail={limit.detail}
@@ -156,8 +237,9 @@ function Launch({
         />
       )}
       <form className="form" onSubmit={submit}>
-        <h3 style={{ fontSize: 20, fontWeight: 600 }}>{template.name[locale]}</h3>
-        <p className="small soft">{template.skills.join(' · ')}</p>
+        <p className="small soft">
+          {m.launch_skills()} <span className="figures">{template.skills.join(' · ')}</span>
+        </p>
         <div className="field">
           <label htmlFor="name">{m.launch_name()}</label>
           <input id="name" name="name" required pattern="[a-z0-9][a-z0-9-]{1,38}" />
@@ -186,6 +268,6 @@ function Launch({
           </button>
         </div>
       </form>
-    </div>
+    </Card>
   );
 }

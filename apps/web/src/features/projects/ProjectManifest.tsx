@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { api, useApi } from '@/lib/api';
 import { label } from '@/lib/labels';
+import { Card } from '@/features/shell/ui';
 import * as m from '@/paraglide/messages.js';
 
 interface SkillChoice {
@@ -52,8 +53,7 @@ export function ProjectManifest({ projectId }: Readonly<{ projectId: string }>) 
     });
 
   return (
-    <section>
-      <h3 className="section-title mono-label">{m.manifest_title()}</h3>
+    <Card title={m.manifest_title()} icon="file">
       <div className="spread mt-md">
         <span className={`manifest-status ${view.status} small`}>
           ● {label('manifest', view.status)} ·{' '}
@@ -125,6 +125,6 @@ export function ProjectManifest({ projectId }: Readonly<{ projectId: string }>) 
         </p>
       )}
       {error && <p className="notice mt-md">{error}</p>}
-    </section>
+    </Card>
   );
 }

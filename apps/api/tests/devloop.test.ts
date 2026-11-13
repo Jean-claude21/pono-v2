@@ -135,7 +135,7 @@ describe.skipIf(process.platform === 'win32')('the dev loop commands in a real s
     );
     child.unref();
     let state = readStatus(sh(statusCommand(repository, port)));
-    for (let i = 0; i < 50 && state.http !== 200; i++) {
+    for (let i = 0; i < 50 && state.phase !== 'running'; i++) {
       await new Promise((r) => setTimeout(r, 200));
       state = readStatus(sh(statusCommand(repository, port)));
     }
