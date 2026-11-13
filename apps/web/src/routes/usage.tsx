@@ -1,10 +1,11 @@
 import { createFileRoute } from '@tanstack/react-router';
 import { useState, type FormEvent } from 'react';
 import { Shell } from '@/features/shell/Shell';
+import { Card, PageHead, StateDot, Stats, Thin, toneOf } from '@/features/shell/ui';
 import { api, useApi } from '@/lib/api';
 import { ago, figure, label, money } from '@/lib/labels';
-import { alertText, type UsageView } from '@/lib/usage';
-import { Card } from '@/features/shell/ui';
+import { alertText, type Reading, type UsageView } from '@/lib/usage';
+import { nameOf } from '@/lib/providers';
 import * as m from '@/paraglide/messages.js';
 
 export const Route = createFileRoute('/usage')({
@@ -15,6 +16,14 @@ export const Route = createFileRoute('/usage')({
   ),
 });
 
+function percentOf(r: Reading): number | null {
+  return r.used !== null && r.quota ? Math.min(100, Math.round((r.used / r.quota) * 100)) : null;
+}
+
+/**
+ * What everything costs and uses (D-022): the month's total and where each figure comes from,
+ * then one card per provider with its meters against their quotas, then the declared subscriptions.
+ */
 function Usage() {
   const usage = useApi<UsageView>('/v1/usage');
   const [busy, setBusy] = useState(false);
@@ -34,56 +43,84 @@ function Usage() {
     usage.reload();
   };
 
+  const providers = [...new Set(readings.map((r) => r.provider))];
+  const bad = alerts.filter((a) => a.level === 'bad');
+  const lastRead =
+    readings
+      .map((r) => r.readAt)
+      .sort()
+      .at(-1) ?? null;
+  const monthly = subscriptions.reduce(
+    (sum, s) => sum + (s.cycle === 'year' ? s.priceMicros / 12 : s.priceMicros),
+    0,
+  );
+
   return (
     <>
-      <div className="topline">
-        <div>
-          <h1>{m.usage_title()}</h1>
-          <p className="mute mt-sm">{m.usage_intro()}</p>
-        </div>
-        <div className="topline-actions">
-          <button type="button" className="btn btn-ghost btn-sm" onClick={() => setAdding(true)}>
-            {m.usage_add()}
-          </button>
-          <button
-            type="button"
-            className="btn btn-primary btn-sm"
-            onClick={refresh}
-            disabled={busy}
-          >
-            {m.usage_refresh()}
-          </button>
-        </div>
-      </div>
+      <PageHead
+        title={m.usage_title()}
+        intro={m.usage_intro()}
+        actions={
+          <>
+            <button type="button" className="btn btn-ghost btn-sm" onClick={() => setAdding(true)}>
+              {m.usage_add()}
+            </button>
+            <button
+              type="button"
+              className="btn btn-primary btn-sm"
+              onClick={refresh}
+              disabled={busy}
+            >
+              {m.usage_refresh()}
+            </button>
+          </>
+        }
+      />
 
-      {alerts.map((a) => (
-        <div className={a.level === 'bad' ? 'verdict' : 'notice warning'} key={a.id}>
-          {a.level === 'bad' ? (
-            <div>
-              <span className="mono-label">{m.usage_alerts()}</span>
-              <h3>{alertText(a)}</h3>
-            </div>
-          ) : (
-            alertText(a)
-          )}
-        </div>
-      ))}
-
-      <div className="kpis">
-        <div className="kpi">
-          <span className="mono-label">{m.usage_month()}</span>
-          <div className="value">{money(total.totalMicros)}</div>
-          {total.unavailable > 0 && (
-            <p>{m.usage_unavailable_count({ count: String(total.unavailable) })}</p>
-          )}
-        </div>
-        {(['measured', 'estimated', 'declared'] as const).map((source) => (
-          <div className="kpi" key={source}>
-            <span className="mono-label">{label('source', source)}</span>
-            <div className="value">{money(total.bySource[source] ?? 0)}</div>
+      {alerts.length > 0 ? (
+        <div className={`verdict${bad.length ? '' : ' warning'}`}>
+          <div>
+            <span className="mono-label">{m.usage_alerts()}</span>
+            {alerts.map((a) => (
+              <h3 key={a.id}>{alertText(a)}</h3>
+            ))}
           </div>
-        ))}
-      </div>
+        </div>
+      ) : (
+        readings.length > 0 && (
+          <div className="verdict healthy">
+            <div>
+              <span className="mono-label">{m.usage_calm_label()}</span>
+              <h3>{m.usage_calm()}</h3>
+            </div>
+          </div>
+        )
+      )}
+
+      <Card
+        title={m.usage_month()}
+        icon="gauge"
+        foot={
+          <>
+            {m.usage_sources_explained()}
+            {lastRead ? ` · ${m.usage_read_at({ when: ago(lastRead) })}` : ''}
+          </>
+        }
+      >
+        <Stats
+          items={[
+            { value: money(total.totalMicros), label: m.usage_total() },
+            { value: money(total.bySource.measured ?? 0), label: label('source', 'measured') },
+            { value: money(total.bySource.estimated ?? 0), label: label('source', 'estimated') },
+            { value: money(total.bySource.declared ?? 0), label: label('source', 'declared') },
+          ]}
+        />
+        {total.unavailable > 0 && (
+          <p className="tiny mute">
+            {m.usage_unavailable_count({ count: String(total.unavailable) })}
+          </p>
+        )}
+      </Card>
 
       {adding && (
         <AddSubscription
@@ -94,95 +131,134 @@ function Usage() {
         />
       )}
 
-      <Card title={m.usage_meters()} icon="gauge">
+      <section className="block">
+        <div className="block-head">
+          <h2>{m.usage_meters()}</h2>
+          <p>{m.usage_meters_body()}</p>
+        </div>
         {readings.length === 0 ? (
-          <p className="mute small mt-md">{m.usage_no_reading()}</p>
+          <p className="notice">{m.usage_no_reading()}</p>
         ) : (
-          <table className="table">
-            <thead>
-              <tr>
-                <th>{m.col_service()}</th>
-                <th>{m.col_meter()}</th>
-                <th>{m.col_use()}</th>
-                <th>{m.col_source()}</th>
-                <th className="num">{m.col_when()}</th>
-              </tr>
-            </thead>
-            <tbody>
-              {readings.map((r) => {
-                const percent =
-                  r.used !== null && r.quota
-                    ? Math.min(100, Math.round((r.used / r.quota) * 100))
-                    : null;
-                return (
-                  <tr key={`${r.provider}-${r.meter}-${r.subject}`}>
-                    <td className="project">
-                      {r.provider}
-                      {r.subject && <small>{r.subject}</small>}
-                    </td>
-                    <td>{label('meter', r.meter)}</td>
-                    <td>
-                      {r.used === null ? (
-                        <span className="mute small">
-                          {r.reason ? label('unavailableReason', r.reason) : '—'}
-                        </span>
-                      ) : (
-                        <span
-                          className={`meter ${percent !== null && percent >= 95 ? 'crit' : percent !== null && percent >= 80 ? 'warn' : ''}`}
-                          style={{
-                            ['--value' as string]: `${percent ?? 0}%`,
-                            justifyItems: 'start',
-                          }}
-                        >
-                          <span className="figures">
-                            {figure(r.used)}
-                            {r.quota !== null ? ` / ${figure(r.quota)}` : ''} {r.unit}
-                          </span>
-                          {percent !== null && <i />}
-                        </span>
-                      )}
-                    </td>
-                    <td>
-                      <span className={`src ${r.source}`}>{label('source', r.source)}</span>
-                    </td>
-                    <td className="num small">{ago(r.readAt)}</td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        )}
-      </Card>
-
-      <Card title={m.usage_subscriptions()} icon="list">
-        {subscriptions.length === 0 ? (
-          <p className="mute small mt-md">{m.usage_no_subscription()}</p>
-        ) : (
-          <div className="list">
-            {subscriptions.map((s) => (
-              <div className="item" key={s.id}>
-                <div>
-                  <h4>
-                    {s.service}
-                    {s.plan ? ` · ${s.plan}` : ''}
-                  </h4>
-                  <p>
-                    {money(s.priceMicros)}{' '}
-                    {s.cycle === 'year' ? m.usage_per_year() : m.usage_per_month()}
-                    {s.renewsOn ? ` · ${m.usage_renews({ date: s.renewsOn })}` : ''} ·{' '}
-                    <span className="src">{label('source', 'declared')}</span>
-                  </p>
-                </div>
-                <div className="row">
-                  <button type="button" className="btn btn-ghost btn-xs" onClick={() => end(s.id)}>
-                    {m.usage_end()}
-                  </button>
-                </div>
-              </div>
-            ))}
+          <div className="grid-cards">
+            {providers.map((provider) => {
+              const own = readings.filter((r) => r.provider === provider);
+              const worst = Math.max(0, ...own.map((r) => percentOf(r) ?? 0));
+              return (
+                <Card
+                  key={provider}
+                  title={nameOf(provider)}
+                  icon="plug"
+                  tools={
+                    worst >= 80 ? (
+                      <StateDot
+                        state={worst >= 95 ? 'failing' : 'warning'}
+                        text={worst >= 95 ? m.overview_alert_bad() : m.overview_alert_warn()}
+                      />
+                    ) : undefined
+                  }
+                  foot={m.usage_read_at({ when: ago(own[0]?.readAt ?? null) })}
+                >
+                  <ul className="lines">
+                    {own.map((r) => {
+                      const percent = percentOf(r);
+                      return (
+                        <li key={`${r.meter}-${r.subject}`}>
+                          <div className="line-top">
+                            <span className="name">{label('meter', r.meter)}</span>
+                            <span className={`src ${r.source}`}>{label('source', r.source)}</span>
+                          </div>
+                          {r.subject && (
+                            <div className="line-top">
+                              <span className="mono">{r.subject}</span>
+                            </div>
+                          )}
+                          {r.used === null ? (
+                            <p className="tiny mute">
+                              {r.reason ? label('unavailableReason', r.reason) : '—'}
+                            </p>
+                          ) : (
+                            <>
+                              <div className="line-top" style={{ marginTop: 4 }}>
+                                <span className="figures sub" style={{ flex: 1 }}>
+                                  {figure(r.used)}
+                                  {r.quota !== null ? ` / ${figure(r.quota)}` : ''} {r.unit}
+                                </span>
+                                {percent !== null && <span className="figures">{percent} %</span>}
+                              </div>
+                              {percent !== null && (
+                                <Thin percent={percent} tone={toneOf(percent)} mark />
+                              )}
+                            </>
+                          )}
+                        </li>
+                      );
+                    })}
+                  </ul>
+                </Card>
+              );
+            })}
           </div>
         )}
-      </Card>
+      </section>
+
+      <section className="block">
+        <div className="block-head">
+          <h2>{m.usage_subscriptions()}</h2>
+          <p>{m.usage_subscriptions_body()}</p>
+        </div>
+        <Card
+          title={m.usage_subscriptions_total({ amount: money(monthly) })}
+          icon="list"
+          tools={
+            <button type="button" className="btn btn-ghost btn-xs" onClick={() => setAdding(true)}>
+              {m.usage_add()}
+            </button>
+          }
+        >
+          {subscriptions.length === 0 ? (
+            <p className="mute small">{m.usage_no_subscription()}</p>
+          ) : (
+            <div className="table-wrap">
+              <table className="table">
+                <thead>
+                  <tr>
+                    <th>{m.col_service()}</th>
+                    <th className="num">{m.form_price()}</th>
+                    <th>{m.form_renews()}</th>
+                    <th className="num" />
+                  </tr>
+                </thead>
+                <tbody>
+                  {subscriptions.map((s) => (
+                    <tr key={s.id}>
+                      <td className="project">
+                        {s.service}
+                        {s.plan && <small>{s.plan}</small>}
+                      </td>
+                      <td className="num figures">
+                        {money(s.priceMicros)}{' '}
+                        <span className="tiny mute">
+                          {s.cycle === 'year' ? m.usage_per_year() : m.usage_per_month()}
+                        </span>
+                      </td>
+                      <td className="small">{s.renewsOn ?? '—'}</td>
+                      <td className="num">
+                        <button
+                          type="button"
+                          className="btn btn-ghost btn-xs"
+                          onClick={() => end(s.id)}
+                        >
+                          {m.usage_end()}
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </Card>
+      </section>
     </>
   );
 }
@@ -206,39 +282,41 @@ function AddSubscription({ onDone }: Readonly<{ onDone: () => void }>) {
     onDone();
   };
   return (
-    <form className="form panel" onSubmit={submit}>
-      <div className="field">
-        <label htmlFor="service">{m.form_service()}</label>
-        <input id="service" name="service" required maxLength={80} />
-      </div>
-      <div className="field">
-        <label htmlFor="plan">{m.form_plan()}</label>
-        <input id="plan" name="plan" maxLength={80} />
-      </div>
-      <div className="field">
-        <label htmlFor="price">{m.form_price()}</label>
-        <input id="price" name="price" type="number" min="0" step="0.01" required />
-      </div>
-      <div className="field">
-        <label htmlFor="cycle">{m.form_cycle()}</label>
-        <select id="cycle" name="cycle">
-          <option value="month">{m.form_cycle_month()}</option>
-          <option value="year">{m.form_cycle_year()}</option>
-        </select>
-      </div>
-      <div className="field">
-        <label htmlFor="renews">{m.form_renews()}</label>
-        <input id="renews" name="renews" type="date" />
-      </div>
-      {error && <p className="small bad">{error}</p>}
-      <div className="row">
-        <button type="submit" className="btn btn-primary btn-sm">
-          {m.form_save()}
-        </button>
-        <button type="button" className="btn btn-ghost btn-sm" onClick={onDone}>
-          {m.form_cancel()}
-        </button>
-      </div>
-    </form>
+    <Card title={m.usage_add()} icon="plus">
+      <form className="form" onSubmit={submit}>
+        <div className="field">
+          <label htmlFor="service">{m.form_service()}</label>
+          <input id="service" name="service" required maxLength={80} />
+        </div>
+        <div className="field">
+          <label htmlFor="plan">{m.form_plan()}</label>
+          <input id="plan" name="plan" maxLength={80} />
+        </div>
+        <div className="field">
+          <label htmlFor="price">{m.form_price()}</label>
+          <input id="price" name="price" type="number" min="0" step="0.01" required />
+        </div>
+        <div className="field">
+          <label htmlFor="cycle">{m.form_cycle()}</label>
+          <select id="cycle" name="cycle">
+            <option value="month">{m.form_cycle_month()}</option>
+            <option value="year">{m.form_cycle_year()}</option>
+          </select>
+        </div>
+        <div className="field">
+          <label htmlFor="renews">{m.form_renews()}</label>
+          <input id="renews" name="renews" type="date" />
+        </div>
+        {error && <p className="small bad">{error}</p>}
+        <div className="row">
+          <button type="submit" className="btn btn-primary btn-sm">
+            {m.form_save()}
+          </button>
+          <button type="button" className="btn btn-ghost btn-sm" onClick={onDone}>
+            {m.form_cancel()}
+          </button>
+        </div>
+      </form>
+    </Card>
   );
 }

@@ -4,7 +4,8 @@ import { LevelChooser, type Level } from '@/features/shell/LevelChooser';
 import { Shell } from '@/features/shell/Shell';
 import { api, useApi } from '@/lib/api';
 import { label, money } from '@/lib/labels';
-import { Card } from '@/features/shell/ui';
+import { LocaleSwitch } from '@/features/shell/LocaleSwitch';
+import { Card, PageHead } from '@/features/shell/ui';
 import * as m from '@/paraglide/messages.js';
 
 export const Route = createFileRoute('/settings')({
@@ -40,15 +41,14 @@ function Settings() {
 
   return (
     <>
-      <div className="topline">
-        <h1>{m.settings_title()}</h1>
-      </div>
-      <Card title={m.settings_level()} icon="settings">
+      <PageHead title={m.settings_title()} intro={m.settings_intro()} />
+      <Card title={m.settings_level()} icon="settings" foot={m.settings_level_foot()}>
+        <p className="small soft">{m.settings_level_body()}</p>
         {me.result?.ok && (
           <LevelChooser current={me.result.data.person.level} onChosen={me.reload} />
         )}
       </Card>
-      <Card title={m.settings_plan()} icon="gauge">
+      <Card title={m.settings_plan()} icon="gauge" foot={m.settings_plan_foot()}>
         {provider === 'none' && <p className="notice">{m.settings_billing_none()}</p>}
         {error && <p className="notice warning">{error}</p>}
         <div className="plans">
@@ -75,6 +75,12 @@ function Settings() {
               )}
             </div>
           ))}
+        </div>
+      </Card>
+      <Card title={m.settings_language()} icon="globe">
+        <div className="spread">
+          <p className="small soft">{m.settings_language_body()}</p>
+          <LocaleSwitch />
         </div>
       </Card>
     </>

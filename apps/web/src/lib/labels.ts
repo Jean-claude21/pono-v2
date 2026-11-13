@@ -64,6 +64,8 @@ const tables: Record<string, Record<string, () => string>> = {
     failed: m.server_status_failed,
     released: m.server_status_released,
   },
+  need: { required: m.need_required, recommended: m.need_recommended, optional: m.need_optional },
+  connectionStatus: { expired: m.connection_expired, revoked: m.connection_revoked },
   level: {
     guided: m.level_short_guided,
     choosing: m.level_short_choosing,

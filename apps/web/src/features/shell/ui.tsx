@@ -30,6 +30,7 @@ const PATHS = {
   file: 'M14 3H6a1 1 0 0 0-1 1v16a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V8zM14 3v5h5',
   list: 'M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01',
   chart: 'M4 19V5M4 19h16M8 15l4-5 3 3 5-6',
+  globe: 'M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18zM3 12h18M12 3c3 3 3 15 0 18M12 3c-3 3-3 15 0 18',
 } as const;
 
 export type IconName = keyof typeof PATHS;

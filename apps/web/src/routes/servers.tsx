@@ -4,7 +4,7 @@ import { LimitChooser, type LimitDetail } from '@/features/servers/LimitChooser'
 import { Shell } from '@/features/shell/Shell';
 import { api, useApi } from '@/lib/api';
 import { ago, label, money } from '@/lib/labels';
-import { Card, Stats } from '@/features/shell/ui';
+import { Card, PageHead, Stats } from '@/features/shell/ui';
 import * as m from '@/paraglide/messages.js';
 
 export const Route = createFileRoute('/servers')({
@@ -67,12 +67,7 @@ function Servers() {
 
   return (
     <>
-      <div className="topline">
-        <div>
-          <h1>{m.servers_title()}</h1>
-          <p className="mute mt-sm">{m.servers_intro()}</p>
-        </div>
-      </div>
+      <PageHead title={m.servers_title()} intro={m.servers_intro()} />
       <Card title={m.rail_plan_title()} icon="server">
         <Stats
           items={[
@@ -104,6 +99,22 @@ function Servers() {
           ))}
         </div>
       </Card>
+      <Card title={m.servers_how_title()} icon="list">
+        <ol className="how">
+          <li>
+            <strong>{m.servers_how_1()}</strong>
+            {m.servers_how_1_body()}
+          </li>
+          <li>
+            <strong>{m.servers_how_2()}</strong>
+            {m.servers_how_2_body()}
+          </li>
+          <li>
+            <strong>{m.servers_how_3()}</strong>
+            {m.servers_how_3_body()}
+          </li>
+        </ol>
+      </Card>
       {limit && (
         <LimitChooser
           detail={limit.detail}
@@ -113,7 +124,12 @@ function Servers() {
       )}
       {error && <p className="notice warning">{error}</p>}
       {servers.length === 0 ? (
-        <p className="notice mt-lg">{m.servers_none()}</p>
+        <Card title={m.servers_title()} icon="server">
+          <p className="small soft">{m.servers_none()}</p>
+          <a className="btn btn-primary btn-sm mt-md" href="/projects">
+            {m.servers_give()}
+          </a>
+        </Card>
       ) : (
         <Card title={m.servers_title()} icon="server" className="mt-md">
           <div className="table-wrap">
