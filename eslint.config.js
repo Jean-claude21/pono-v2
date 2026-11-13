@@ -29,6 +29,15 @@ export default tseslint.config(
     },
   },
   {
+    // Scripts that run on project servers as plain CommonJS (D-027); out() ends the process.
+    files: ['**/*.cjs'],
+    languageOptions: {
+      sourceType: 'commonjs',
+      globals: { require: 'readonly', process: 'readonly', Buffer: 'readonly' },
+    },
+    rules: { '@typescript-eslint/no-require-imports': 'off', 'no-fallthrough': 'off' },
+  },
+  {
     rules: {
       '@typescript-eslint/no-unused-vars': ['error', { argsIgnorePattern: '^_' }],
     },

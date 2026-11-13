@@ -73,8 +73,17 @@ export function cloudflareHosting(fetchImpl: Fetch): Hosting & Connectable {
     id: ID,
     kind: 'hosting',
     fields: ['token', 'accountId'],
+    optionalFields: ['accountId'],
+    keyUrl: 'https://dash.cloudflare.com/profile/api-tokens',
+    keyScopes: 'Template « Edit Cloudflare Workers », plus Cloudflare Pages: Edit',
     async verify(fields) {
-      const credential: Credential = { token: fields.token!, accountId: fields.accountId! };
+      let accountId = fields.accountId;
+      if (!accountId) {
+        const accounts = await get<{ id: string }[]>(fields.token!, '/accounts?per_page=5');
+        accountId = accounts[0]?.id;
+        if (!accountId) throw new ProviderError(ID, 403, 'This token sees no account.');
+      }
+      const credential: Credential = { token: fields.token!, accountId };
       // A user token verifies at /user, an account token at its account.
       await get(credential.token, '/user/tokens/verify').catch(() =>
         get(credential.token, `/accounts/${credential.accountId}/tokens/verify`),

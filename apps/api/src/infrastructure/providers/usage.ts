@@ -253,6 +253,8 @@ export function openaiUsage(fetchImpl: Fetch): UsageSource & Connectable {
     id: provider,
     kind: 'ai',
     fields: ['token'],
+    keyUrl: 'https://platform.openai.com/settings/organization/admin-keys',
+    keyScopes: 'An admin key with usage read',
     async verify(fields) {
       await fetchJson(fetchImpl, {
         provider,

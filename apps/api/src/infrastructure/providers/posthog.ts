@@ -45,6 +45,8 @@ export function posthogAnalytics(fetchImpl: Fetch): SiteAnalytics & Connectable 
     id: ID,
     kind: 'analytics',
     fields: ['apiKey', 'host'],
+    keyUrl: 'https://us.posthog.com/settings/user-api-keys',
+    keyScopes: 'A personal API key, scopes: project read and write',
     async verify(fields) {
       const host = HOSTS[fields.host ?? ''] ?? fields.host ?? '';
       if (!/^https:\/\/\S+$/.test(host))

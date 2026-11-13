@@ -1,4 +1,4 @@
-import { readFileSync } from 'node:fs';
+import { readdirSync, readFileSync, statSync } from 'node:fs';
 import { Hono } from 'hono';
 import { parse as parseYaml } from 'yaml';
 import { z } from 'zod';
@@ -23,11 +23,20 @@ export interface Template {
   scope?: Scope;
 }
 
+/**
+ * A skill, as the open Agent Skills standard shapes it (D-028): a folder whose SKILL.md carries a
+ * name and a description, then its instructions; beside it, files read only when needed
+ * (`references/`, `scripts/`, `assets/`).
+ */
 export interface Skill {
   name: string;
   family: SkillFamily;
   description: string;
   body: string;
+  /** The skill's other files, by path inside its folder. */
+  files?: Record<string, string> | undefined;
+  license?: string | undefined;
+  compatibility?: string | undefined;
   scope?: Scope;
 }
 
@@ -38,7 +47,89 @@ export interface Catalog {
 
 const CATALOG_DIR = new URL('../../../catalog/', import.meta.url);
 
-/** `## name · family`, then `_description_`, then the body, until the next `## `. */
+/** The standard's name rule: lowercase letters, digits and single hyphens, at most 64. */
+export const SKILL_NAME = /^[a-z0-9]+(-[a-z0-9]+)*$/;
+/** Files a skill may carry beside its SKILL.md. */
+export const SKILL_FILE = /^(references|scripts|assets)(\/(?!\.\.?(\/|$))[\w.-]+)+$/;
+
+/**
+ * Reads a SKILL.md: its YAML front matter (name, description, metadata.family, license,
+ * compatibility), then its body. `folder`, when known, must be the skill's name.
+ */
+export function parseSkillFile(text: string, folder?: string): Skill {
+  const m = /^---\r?\n([\s\S]*?)\r?\n---\r?\n?([\s\S]*)$/.exec(text.trimStart());
+  if (!m) throw new Error('SKILL.md must start with a front matter between --- lines.');
+  const meta = (parseYaml(m[1]!) ?? {}) as {
+    name?: string;
+    description?: string;
+    license?: string;
+    compatibility?: string;
+    family?: string;
+    metadata?: { family?: string };
+  };
+  const name = String(meta.name ?? '');
+  if (!SKILL_NAME.test(name) || name.length > 64)
+    throw new Error(`Skill name "${name}" must be lowercase words joined by single hyphens.`);
+  if (folder && folder !== name)
+    throw new Error(`Skill ${name} lives in a folder named ${folder}.`);
+  const description = String(meta.description ?? '').trim();
+  if (!description || description.length > 1024)
+    throw new Error(`Skill ${name} needs a description of at most 1024 characters.`);
+  const family = meta.metadata?.family ?? meta.family ?? 'opinion';
+  if (family !== 'safety' && family !== 'opinion' && family !== 'design')
+    throw new Error(`Skill ${name} has no family (safety, opinion or design).`);
+  return {
+    name,
+    family,
+    description,
+    body: m[2]!.trim(),
+    ...(meta.license ? { license: String(meta.license) } : {}),
+    ...(meta.compatibility ? { compatibility: String(meta.compatibility) } : {}),
+  };
+}
+
+/** Writes a skill back as its SKILL.md. */
+export function renderSkillFile(skill: Skill): string {
+  const lines = [
+    '---',
+    `name: ${skill.name}`,
+    `description: ${JSON.stringify(skill.description)}`,
+    ...(skill.license ? [`license: ${JSON.stringify(skill.license)}`] : []),
+    ...(skill.compatibility ? [`compatibility: ${JSON.stringify(skill.compatibility)}`] : []),
+    'metadata:',
+    `  family: ${skill.family}`,
+    '---',
+    '',
+    skill.body,
+    '',
+  ];
+  return lines.join('\n');
+}
+
+/** Every skill folder under `dir`: its SKILL.md and its other files. */
+export function loadSkillFolders(dir: URL): Skill[] {
+  return readdirSync(dir, { withFileTypes: true })
+    .filter((d) => d.isDirectory())
+    .map((d) => {
+      const root = new URL(`${d.name}/`, dir);
+      const skill = parseSkillFile(readFileSync(new URL('SKILL.md', root), 'utf8'), d.name);
+      const files: Record<string, string> = {};
+      const walk = (rel: string) => {
+        for (const entry of readdirSync(new URL(rel, root), { withFileTypes: true })) {
+          const path = `${rel}${entry.name}`;
+          if (entry.isDirectory()) walk(`${path}/`);
+          else if (SKILL_FILE.test(path) && statSync(new URL(path, root)).size <= 100_000)
+            files[path] = readFileSync(new URL(path, root), 'utf8');
+        }
+      };
+      for (const top of ['references', 'scripts', 'assets'])
+        if (readdirSync(root).includes(top)) walk(`${top}/`);
+      return Object.keys(files).length ? { ...skill, files } : skill;
+    })
+    .sort((a, b) => a.name.localeCompare(b.name));
+}
+
+/** The first format (`## name · family`, `_description_`, body), still read from old template repositories. */
 export function parseSkills(markdown: string): Skill[] {
   return markdown
     .split(/^## /m)
@@ -70,7 +161,7 @@ function checkSkills(catalog: Catalog): void {
 /** The templates and skills shipped with Pono (phase 6); read once, at start. */
 export function loadCatalog(dir: URL = CATALOG_DIR): Catalog {
   const templates = JSON.parse(readFileSync(new URL('templates.json', dir), 'utf8')) as Template[];
-  const skills = parseSkills(readFileSync(new URL('skills.md', dir), 'utf8'));
+  const skills = loadSkillFolders(new URL('skills/', dir));
   const catalog = {
     templates: templates.map((t) => ({ ...t, scope: 'pono' as const })),
     skills: skills.map((s) => ({ ...s, scope: 'pono' as const })),
@@ -98,10 +189,16 @@ export const templateInput = z.strictObject({
 });
 
 export const skillInput = z.strictObject({
-  name: entryName,
+  name: z.string().max(64).regex(SKILL_NAME),
   family: z.enum(['safety', 'opinion', 'design']),
-  description: z.string().min(10).max(300),
-  body: z.string().min(20).max(20_000),
+  description: z.string().min(10).max(1024),
+  body: z.string().min(20).max(40_000),
+  files: z
+    .record(z.string().regex(SKILL_FILE), z.string().max(100_000))
+    .refine((f) => Object.keys(f).length <= 20, 'At most 20 files.')
+    .optional(),
+  license: z.string().max(200).optional(),
+  compatibility: z.string().max(500).optional(),
 });
 
 interface EntryRow {
@@ -272,7 +369,9 @@ export function readTemplateRepository(
     });
   const skills = skillFiles.flatMap((content) => {
     try {
-      return parseSkills(content);
+      return content.trimStart().startsWith('---')
+        ? [parseSkillFile(content)]
+        : parseSkills(content);
     } catch (error) {
       throw new AppError('catalog.unreadable', 422, (error as Error).message);
     }
@@ -293,11 +392,12 @@ const kindOf = (raw: string): 'template' | 'skill' => {
   throw new AppError('route.not_found', 404, 'No such route.');
 };
 
-const card = ({ name, family, description, scope }: Skill) => ({
+const card = ({ name, family, description, scope, files }: Skill) => ({
   name,
   family,
   description,
   scope,
+  files: Object.keys(files ?? {}),
 });
 
 /** `/v1/catalog/*`: the same catalog for the console and the agents. */

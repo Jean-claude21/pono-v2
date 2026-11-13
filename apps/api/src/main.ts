@@ -47,7 +47,12 @@ if (config.PONO_GITHUB_CLIENT_ID && config.PONO_GITHUB_CLIENT_SECRET) {
 if (config.PONO_DEV_SIGN_IN === '1') identity.push(devIdentity());
 
 const github = githubCodeHost(fetch);
-const netlify = netlifyHosting(fetch);
+const netlify = netlifyHosting(
+  fetch,
+  config.NETLIFY_OAUTH_CLIENT_ID && config.NETLIFY_OAUTH_CLIENT_SECRET
+    ? { clientId: config.NETLIFY_OAUTH_CLIENT_ID, clientSecret: config.NETLIFY_OAUTH_CLIENT_SECRET }
+    : undefined,
+);
 const coolify = coolifyHosting(fetch);
 const cloudflare = cloudflareHosting(fetch);
 const neon = neonDatabase(fetch);

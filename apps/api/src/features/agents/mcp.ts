@@ -11,6 +11,7 @@ import {
   createSkill,
   createTemplate,
   proposeSharing,
+  renderSkillFile,
   skillInput,
   type Catalog,
 } from '../catalog/index.js';
@@ -28,19 +29,21 @@ import {
   stopDev,
 } from '../devloop/index.js';
 import { checkSecrets, listVariables, requestVariable, variableName } from '../variables/index.js';
-import { activeCredentials } from '../connections/index.js';
+import { activeCredentials, type Connectable } from '../connections/index.js';
 import { LEVEL_GUIDANCE, LEVELS, levelOf, setLevel } from '../identity/index.js';
 import { manifestView, proposeSkills } from '../manifest/index.js';
 import { importProject, refreshProject } from '../projects/application.js';
 import { evaluateReleases, listReleases, requestRollback } from '../releases/index.js';
 import { serversView, sleepServer, syncServers, wakeServer } from '../servers/index.js';
 import { readUsage, usageView, type UsageDeps } from '../usage/index.js';
+import { connectUrl, MISSING_BY_CODE, whatIsMissing } from './needs.js';
 import { mcpUnauthorized } from './oauth.js';
 import { recognize, type Candidate } from './recognize.js';
 
 export interface McpDeps extends LaunchDeps, UsageDeps {
   catalog: Catalog;
   publicUrl: string;
+  connectable: Connectable[];
 }
 
 const INSTRUCTIONS = `Pono is the person's workshop: their projects, what their subscriptions cost, a server for each
@@ -50,12 +53,16 @@ continue X », or « continue this project » inside a folder, call find_project
 the folder's git remote as repository, then resume_project. A repository Pono does not know yet, in any
 technology, joins with adopt_project. If find_project answers ambiguous, ask
 the person which one; never guess. Never ask for a key in the conversation: keys are set in the
-console. You never validate a release nor roll back: you propose, a person decides.
+console. You never validate a release nor roll back: you propose, a person decides. Before
+publishing, adding a database, counting visits or using AI, call what_is_missing: when a service is
+missing, explain in plain words what it is for, give its link, and continue once it is connected.
 
 You can code without any machine of your own: each project has a server where its repository lives
 on the dev branch. Call start_dev once (it answers the preview address), then work there with
-list_files, search_code, read_file, edit_file, write_file and run_command. Read a file before you
-edit it: edit_file needs old_text exactly as read. The preview reloads by itself: give its address
+project_map, list_files, search_code, read_file, edit_file (or apply_patch for several files),
+write_file and run_command. Read a file before you edit it: edit_file needs old_text as read. An
+edit that breaks a file's syntax is refused; after a change, devServer shows the dev server's
+errors: fix them before going on. undo_edit puts a file back. The preview reloads by itself: give its address
 to the person after a visible change. Look at show_changes, then push_changes to save the work on
 dev; propose_release when the person wants it in production.`;
 
@@ -65,12 +72,25 @@ function json(value: unknown): Text {
   return { content: [{ type: 'text', text: JSON.stringify(value, null, 2) }] };
 }
 
+/** The console's address, for the links an agent gives the person (set once, at start). */
+let publicBase = '';
+
 async function guard(work: () => Promise<unknown>): Promise<Text> {
   try {
     return json(await work());
   } catch (error) {
-    if (error instanceof AppError)
-      return { ...json(errorBody(error.code, error.message, error.detail)), isError: true };
+    if (error instanceof AppError) {
+      // A refusal for a missing service carries the link to connect it (D-029).
+      const kind = MISSING_BY_CODE[error.code];
+      const detail = kind
+        ? {
+            ...(error.detail ?? {}),
+            connectUrl: connectUrl(publicBase, kind),
+            say: `Tell the person, in plain words, to connect this service at ${connectUrl(publicBase, kind)}, then continue.`,
+          }
+        : error.detail;
+      return { ...json(errorBody(error.code, error.message, detail)), isError: true };
+    }
     throw error;
   }
 }
@@ -121,6 +141,7 @@ async function projectStatus(deps: McpDeps, actor: Actor, projectId: string) {
 
 /** One MCP server per request, bound to the agent's token: the same rights as its person (principle 5). */
 function buildServer(deps: McpDeps, actor: Actor, scope: 'read' | 'act'): McpServer {
+  publicBase = deps.publicUrl;
   const server = new McpServer({ name: 'pono', version: '1.0.0' }, { instructions: INSTRUCTIONS });
   const read = { readOnlyHint: true, openWorldHint: false } as const;
   const act = { readOnlyHint: false, destructiveHint: false, openWorldHint: true } as const;
@@ -238,10 +259,18 @@ function buildServer(deps: McpDeps, actor: Actor, scope: 'read' | 'act'): McpSer
       description:
         "Keeps a way of doing as a skill of the organization (private; family opinion or design). Write it in the person's words; it is read by every agent of the organization.",
       inputSchema: {
-        name: z.string(),
+        name: z
+          .string()
+          .describe('Lowercase words joined by hyphens, as in the Agent Skills standard.'),
         family: z.enum(['opinion', 'design']),
-        description: z.string(),
-        body: z.string(),
+        description: z
+          .string()
+          .describe('What it does and when to use it, at most 1024 characters.'),
+        body: z.string().describe('The instructions (the body of SKILL.md), under 500 lines.'),
+        files: z
+          .record(z.string(), z.string())
+          .optional()
+          .describe('Other files by path: references/…, scripts/…, assets/…'),
       },
       annotations: act,
     },
@@ -252,7 +281,7 @@ function buildServer(deps: McpDeps, actor: Actor, scope: 'read' | 'act'): McpSer
           throw new AppError(
             'request.invalid',
             400,
-            'A name in kebab-case, a description, a body.',
+            'A name in kebab-case, a description, a body, and files under references/, scripts/ or assets/.',
           );
         return createSkill(deps, actor, parsed.data);
       }),
@@ -307,6 +336,17 @@ function buildServer(deps: McpDeps, actor: Actor, scope: 'read' | 'act'): McpSer
       }),
   );
 
+  /** The project's active skills, written on its server as SKILL.md folders (D-028). */
+  async function installSkills(projectId: string) {
+    const manifest = await manifestView(deps, actor, projectId);
+    const known = (await catalog()).skills;
+    const skills = manifest.skills
+      .filter((s) => s.active)
+      .flatMap((s) => known.filter((k) => k.name === s.name))
+      .map((s) => ({ name: s.name, text: renderSkillFile(s), files: s.files ?? {} }));
+    return codeOn(deps, actor, projectId, { op: 'skills', skills });
+  }
+
   server.registerTool(
     'start_dev',
     {
@@ -315,7 +355,12 @@ function buildServer(deps: McpDeps, actor: Actor, scope: 'read' | 'act'): McpSer
       inputSchema: { projectId: z.string() },
       annotations: act,
     },
-    async ({ projectId }) => acting(() => startDev(deps, actor, projectId)),
+    async ({ projectId }) =>
+      acting(async () => {
+        const started = await startDev(deps, actor, projectId);
+        const skills = await installSkills(projectId).catch(() => null);
+        return { ...started, skills: skills?.installed ?? [] };
+      }),
   );
 
   server.registerTool(
@@ -501,6 +546,42 @@ function buildServer(deps: McpDeps, actor: Actor, scope: 'read' | 'act'): McpSer
   );
 
   server.registerTool(
+    'project_map',
+    {
+      description:
+        'A map of the repository: each file with its line count and its top-level names (functions, classes, components). Read it first in a project you do not know, then read_file what matters. Narrow with a folder.',
+      inputSchema: { ...project, path: z.string().optional() },
+      annotations: read,
+    },
+    async ({ projectId, path }) =>
+      guard(() => codeOn(deps, actor, projectId, { op: 'map', path: path ?? null })),
+  );
+
+  server.registerTool(
+    'apply_patch',
+    {
+      description:
+        'Changes several files at once, all or nothing, in the apply_patch format: *** Begin Patch, then *** Add File: <path> (lines starting with +), *** Delete File: <path>, or *** Update File: <path> (optionally *** Move to: <path>) with @@ chunks of context lines (space), removed lines (-) and added lines (+), then *** End Patch. Answers the diff.',
+      inputSchema: { ...project, patch: z.string().min(1).max(LIMITS.writeChars) },
+      annotations: act,
+    },
+    async ({ projectId, patch }) =>
+      acting(() => codeOn(deps, actor, projectId, { op: 'patch', patch })),
+  );
+
+  server.registerTool(
+    'undo_edit',
+    {
+      description:
+        'Puts a file back as it was before its last change by Pono (edit, write, patch, move or delete); up to 10 steps back per file.',
+      inputSchema: { ...project, path: z.string() },
+      annotations: act,
+    },
+    async ({ projectId, path }) =>
+      acting(() => codeOn(deps, actor, projectId, { op: 'undo', path })),
+  );
+
+  server.registerTool(
     'show_changes',
     {
       description:
@@ -661,9 +742,49 @@ function buildServer(deps: McpDeps, actor: Actor, scope: 'read' | 'act'): McpSer
   );
 
   server.registerTool(
+    'what_is_missing',
+    {
+      description:
+        'Before an action, what the person must still connect: for code, preview, publish (put online), database, visits or ai. When something is missing, tell the person in plain words what it is for, give the link, wait, then continue. Never ask for a key in the chat.',
+      inputSchema: {
+        goal: z.enum(['code', 'preview', 'publish', 'database', 'visits', 'ai']),
+      },
+      annotations: read,
+    },
+    async ({ goal }) =>
+      guard(() =>
+        whatIsMissing(
+          { pool: deps.pool, connectable: deps.connectable, publicUrl: deps.publicUrl },
+          actor,
+          goal,
+        ),
+      ),
+  );
+
+  server.registerTool(
+    'list_skills',
+    {
+      description:
+        "Every skill this organization can use (Pono's, the operator's, its own): name, family and when to use it. Read one with get_skill only when its description fits the task.",
+      annotations: read,
+    },
+    async () =>
+      guard(async () => ({
+        skills: (await catalog()).skills.map((s) => ({
+          name: s.name,
+          family: s.family,
+          description: s.description,
+          scope: s.scope,
+          files: Object.keys(s.files ?? {}),
+        })),
+      })),
+  );
+
+  server.registerTool(
     'get_skill',
     {
-      description: 'A skill Pono serves: how to do a thing right on a Pono project.',
+      description:
+        'A skill: its instructions (SKILL.md) and the list of its other files (references, scripts, assets). Read those with get_skill_file only when the instructions point to them.',
       inputSchema: { name: z.string() },
       annotations: read,
     },
@@ -671,8 +792,39 @@ function buildServer(deps: McpDeps, actor: Actor, scope: 'read' | 'act'): McpSer
       guard(async () => {
         const skill = (await catalog()).skills.find((s) => s.name === name);
         if (!skill) throw new AppError('skill.not_found', 404, 'No such skill.');
-        return skill;
+        const { files, ...rest } = skill;
+        return { ...rest, files: Object.keys(files ?? {}) };
       }),
+  );
+
+  server.registerTool(
+    'get_skill_file',
+    {
+      description: "One of a skill's files (a reference, a script, an asset), as its text.",
+      inputSchema: { name: z.string(), path: z.string() },
+      annotations: read,
+    },
+    async ({ name, path }) =>
+      guard(async () => {
+        const skill = (await catalog()).skills.find((s) => s.name === name);
+        const content = skill?.files?.[path];
+        if (content === undefined)
+          throw new AppError('skill.file_not_found', 404, 'No such file in this skill.', {
+            files: Object.keys(skill?.files ?? {}),
+          });
+        return { name, path, content };
+      }),
+  );
+
+  server.registerTool(
+    'install_skills',
+    {
+      description:
+        "Writes the project's active skills, as SKILL.md folders, on its server (.claude/skills and .agents/skills, kept out of git), where coding agents read them natively. start_dev does it too.",
+      inputSchema: { projectId: z.string() },
+      annotations: act,
+    },
+    async ({ projectId }) => acting(() => installSkills(projectId)),
   );
 
   server.registerTool(
