@@ -13,13 +13,20 @@ export interface BillingProvider {
     organizationId: string;
     plan: Exclude<Plan, 'free'>;
     email: string | null;
+    name: string | null;
     returnUrl: string;
   }): Promise<string>;
   /** A provider event, verified; null when it is not about a plan. Throws when the signature is wrong. */
   event(
     rawBody: string,
     signature: string | undefined,
-  ): Promise<{ organizationId: string; plan: Plan; customer: string | null } | null>;
+  ): Promise<{
+    organizationId: string;
+    plan: Plan;
+    customer: string | null;
+    /** A one-off payment that buys `days` of the plan (D-023); absent for a subscription. */
+    payment?: { id: string; days: number };
+  } | null>;
 }
 
 export interface BillingDeps {
@@ -51,10 +58,18 @@ export function planRoutes(deps: BillingDeps): Hono<AppEnv> {
         .object({ plan: z.enum(['solo', 'pro']) })
         .safeParse(await c.req.json().catch(() => null));
       if (!body.success) throw new AppError('request.invalid', 400, 'Expected a paid plan.');
+      const email = await withOrganization(deps.pool, actor.organizationId, async (client) => {
+        const { rows } = await client.query<{ email: string }>(
+          'SELECT email FROM organization_recipients($1)',
+          [actor.organizationId],
+        );
+        return rows[0]?.email ?? null;
+      });
       const url = await deps.billing.checkout({
         organizationId: actor.organizationId,
         plan: body.data.plan,
-        email: null,
+        email,
+        name: actor.name,
         returnUrl: `${deps.publicUrl}/settings`,
       });
       return c.json({ url });
@@ -69,7 +84,9 @@ export function billingWebhook(deps: BillingDeps): Hono<AppEnv> {
     try {
       event = await deps.billing.event(
         raw,
-        c.req.header('stripe-signature') ?? c.req.header('x-pono-signature'),
+        c.req.header('stripe-signature') ??
+          c.req.header('x-moneroo-signature') ??
+          c.req.header('x-pono-signature'),
       );
     } catch {
       throw new AppError(
@@ -78,7 +95,16 @@ export function billingWebhook(deps: BillingDeps): Hono<AppEnv> {
         'This event is not signed by the billing provider.',
       );
     }
-    if (event)
+    if (event?.payment)
+      // Once per payment, whatever the provider retries: the plan runs `days` more.
+      await deps.pool.query('SELECT pay_organization_plan($1, $2, $3, $4, $5)', [
+        event.organizationId,
+        event.plan,
+        event.customer,
+        event.payment.id,
+        event.payment.days,
+      ]);
+    else if (event)
       await deps.pool.query('SELECT set_organization_plan($1, $2, $3)', [
         event.organizationId,
         event.plan,

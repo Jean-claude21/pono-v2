@@ -12,6 +12,10 @@ const NAMES: Record<string, string> = {
   agent37: 'Agent37',
   stripe: 'Stripe',
   resend: 'Resend',
+  moneroo: 'Moneroo',
+  'claude-code': 'Claude Code',
+  codex: 'Codex',
+  cursor: 'Cursor',
 };
 
 export const nameOf = (provider: string): string => NAMES[provider] ?? provider;

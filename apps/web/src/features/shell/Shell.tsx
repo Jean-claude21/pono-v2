@@ -5,6 +5,7 @@ import * as m from '@/paraglide/messages.js';
 import { LevelChooser } from './LevelChooser';
 import { LocaleSwitch } from './LocaleSwitch';
 import { Palette, type Destination } from './Palette';
+import { Home } from '@/features/home/Home';
 import { SignIn } from './SignIn';
 import { Icon, type IconName } from './ui';
 
@@ -142,7 +143,8 @@ export function Shell({
 
   if (!me.result) return <p className="page mute">{m.loading()}</p>;
   if (!me.result.ok) {
-    if (me.result.error.status === 401) return <SignIn />;
+    // Signed out: the public page on the home address, the sign-in everywhere else.
+    if (me.result.error.status === 401) return section === 'overview' ? <Home /> : <SignIn />;
     return <p className="page">{label('error', me.result.error.code)}</p>;
   }
   const { person, organization, isAdmin } = me.result.data;
