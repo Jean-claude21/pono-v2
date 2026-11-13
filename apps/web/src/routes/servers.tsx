@@ -4,6 +4,7 @@ import { LimitChooser, type LimitDetail } from '@/features/servers/LimitChooser'
 import { Shell } from '@/features/shell/Shell';
 import { api, useApi } from '@/lib/api';
 import { ago, label, money } from '@/lib/labels';
+import { Card, Stats } from '@/features/shell/ui';
 import * as m from '@/paraglide/messages.js';
 
 export const Route = createFileRoute('/servers')({
@@ -72,22 +73,37 @@ function Servers() {
           <p className="mute mt-sm">{m.servers_intro()}</p>
         </div>
       </div>
-      <div className="slots" style={{ border: 0, padding: '16px 0 0' }}>
-        <div className="spread">
-          <span className="mono-label">
-            {m.servers_active({
-              active: String(active),
-              limit: String(slots),
-              plan: label('plan', plan),
-            })}
-          </span>
-        </div>
+      <Card title={m.rail_plan_title()} icon="server">
+        <Stats
+          items={[
+            {
+              value: `${active}/${slots}`,
+              label: m.overview_servers_slots(),
+              ...(active >= slots ? { tone: 'warning' as const } : {}),
+            },
+            {
+              value: servers.filter((x) => x.status === 'running').length,
+              label: m.overview_servers_running(),
+            },
+            {
+              value: money(servers.reduce((sum, x) => sum + x.monthlyMicros, 0)),
+              label: m.overview_servers_month(),
+            },
+          ]}
+        />
+        <span className="mono-label">
+          {m.servers_active({
+            active: String(active),
+            limit: String(slots),
+            plan: label('plan', plan),
+          })}
+        </span>
         <div className="slots-bar">
           {Array.from({ length: slots }, (_, i) => (
             <i key={i} className={i < active ? (active >= slots ? 'full' : 'on') : ''} />
           ))}
         </div>
-      </div>
+      </Card>
       {limit && (
         <LimitChooser
           detail={limit.detail}
@@ -99,72 +115,76 @@ function Servers() {
       {servers.length === 0 ? (
         <p className="notice mt-lg">{m.servers_none()}</p>
       ) : (
-        <table className="table mt-lg">
-          <thead>
-            <tr>
-              <th>{m.col_project()}</th>
-              <th>{m.col_state()}</th>
-              <th>{m.col_agent()}</th>
-              <th>{m.col_size()}</th>
-              <th className="num">{m.col_cost()}</th>
-              <th className="num" />
-            </tr>
-          </thead>
-          <tbody>
-            {servers.map((s) => (
-              <tr key={s.id}>
-                <td className="project">
-                  <a href={`/projects/${s.projectId}`} style={{ textDecoration: 'none' }}>
-                    {s.projectName}
-                  </a>
-                  <small>{s.url ?? '—'}</small>
-                </td>
-                <td>
-                  <span
-                    className={`state state-${s.status === 'running' ? 'healthy' : s.status === 'failed' ? 'failing' : s.status === 'waking' || s.status === 'provisioning' ? 'warning' : 'idle'}`}
-                  >
-                    {label('serverStatus', s.status)}
-                  </span>
-                  <div className="tiny mute">{ago(s.statusAt)}</div>
-                </td>
-                <td className="small">{label('agent', s.agent)}</td>
-                <td className="figures tiny">{s.size}</td>
-                <td className="num figures">{money(s.monthlyMicros)}</td>
-                <td className="num">
-                  <div className="row" style={{ justifyContent: 'flex-end' }}>
-                    {s.status === 'running' ? (
-                      <button
-                        type="button"
-                        className="btn btn-ghost btn-xs"
-                        onClick={() => gesture(`/v1/servers/${s.id}/sleep`)}
+        <Card title={m.servers_title()} icon="server" className="mt-md">
+          <div className="table-wrap">
+            <table className="table">
+              <thead>
+                <tr>
+                  <th>{m.col_project()}</th>
+                  <th>{m.col_state()}</th>
+                  <th>{m.col_agent()}</th>
+                  <th>{m.col_size()}</th>
+                  <th className="num">{m.col_cost()}</th>
+                  <th className="num" />
+                </tr>
+              </thead>
+              <tbody>
+                {servers.map((s) => (
+                  <tr key={s.id}>
+                    <td className="project">
+                      <a href={`/projects/${s.projectId}`} style={{ textDecoration: 'none' }}>
+                        {s.projectName}
+                      </a>
+                      <small>{s.url ?? '—'}</small>
+                    </td>
+                    <td>
+                      <span
+                        className={`state state-${s.status === 'running' ? 'healthy' : s.status === 'failed' ? 'failing' : s.status === 'waking' || s.status === 'provisioning' ? 'warning' : 'idle'}`}
                       >
-                        {m.servers_sleep()}
-                      </button>
-                    ) : (
-                      <button
-                        type="button"
-                        className="btn btn-ghost btn-xs"
-                        onClick={() => wake(s.id)}
-                      >
-                        {m.servers_wake()}
-                      </button>
-                    )}
-                    <button
-                      type="button"
-                      className="btn btn-danger btn-xs"
-                      onClick={() => {
-                        if (window.confirm(m.servers_release_confirm()))
-                          void gesture(`/v1/servers/${s.id}`, undefined, 'DELETE');
-                      }}
-                    >
-                      {m.servers_release()}
-                    </button>
-                  </div>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+                        {label('serverStatus', s.status)}
+                      </span>
+                      <div className="tiny mute">{ago(s.statusAt)}</div>
+                    </td>
+                    <td className="small">{label('agent', s.agent)}</td>
+                    <td className="figures tiny">{s.size}</td>
+                    <td className="num figures">{money(s.monthlyMicros)}</td>
+                    <td className="num">
+                      <div className="row" style={{ justifyContent: 'flex-end' }}>
+                        {s.status === 'running' ? (
+                          <button
+                            type="button"
+                            className="btn btn-ghost btn-xs"
+                            onClick={() => gesture(`/v1/servers/${s.id}/sleep`)}
+                          >
+                            {m.servers_sleep()}
+                          </button>
+                        ) : (
+                          <button
+                            type="button"
+                            className="btn btn-ghost btn-xs"
+                            onClick={() => wake(s.id)}
+                          >
+                            {m.servers_wake()}
+                          </button>
+                        )}
+                        <button
+                          type="button"
+                          className="btn btn-danger btn-xs"
+                          onClick={() => {
+                            if (window.confirm(m.servers_release_confirm()))
+                              void gesture(`/v1/servers/${s.id}`, undefined, 'DELETE');
+                          }}
+                        >
+                          {m.servers_release()}
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </Card>
       )}
     </>
   );

@@ -3,6 +3,8 @@ import { useState, type FormEvent } from 'react';
 import { Shell } from '@/features/shell/Shell';
 import { api, useApi } from '@/lib/api';
 import { ago, figure, label, money } from '@/lib/labels';
+import { alertText, type UsageView } from '@/lib/usage';
+import { Card } from '@/features/shell/ui';
 import * as m from '@/paraglide/messages.js';
 
 export const Route = createFileRoute('/usage')({
@@ -12,52 +14,6 @@ export const Route = createFileRoute('/usage')({
     </Shell>
   ),
 });
-
-interface Reading {
-  provider: string;
-  meter: string;
-  subject: string;
-  used: number | null;
-  quota: number | null;
-  unit: string;
-  costMicros: number | null;
-  source: string;
-  reason: string | null;
-  readAt: string;
-}
-
-interface Subscription {
-  id: string;
-  service: string;
-  plan: string | null;
-  priceMicros: number;
-  cycle: 'month' | 'year';
-  renewsOn: string | null;
-}
-
-interface Alert {
-  id: string;
-  kind: string;
-  level: string;
-  detail: Record<string, string | number>;
-}
-
-interface UsageView {
-  total: { totalMicros: number; bySource: Record<string, number>; unavailable: number };
-  readings: Reading[];
-  subscriptions: Subscription[];
-  alerts: Alert[];
-}
-
-function alertText(a: Alert): string {
-  if (a.kind === 'renewal')
-    return m.alert_renewal({ service: String(a.detail.service), days: String(a.detail.days) });
-  return m.alert_quota({
-    meter: label('meter', String(a.detail.meter)),
-    subject: String(a.detail.subject ?? ''),
-    percent: String(Math.round(Number(a.detail.ratio) * 100)),
-  });
-}
 
 function Usage() {
   const usage = useApi<UsageView>('/v1/usage');
@@ -138,90 +94,95 @@ function Usage() {
         />
       )}
 
-      <h3 className="section-title mono-label">{m.usage_meters()}</h3>
-      {readings.length === 0 ? (
-        <p className="mute small mt-md">{m.usage_no_reading()}</p>
-      ) : (
-        <table className="table">
-          <thead>
-            <tr>
-              <th>{m.col_service()}</th>
-              <th>{m.col_meter()}</th>
-              <th>{m.col_use()}</th>
-              <th>{m.col_source()}</th>
-              <th className="num">{m.col_when()}</th>
-            </tr>
-          </thead>
-          <tbody>
-            {readings.map((r) => {
-              const percent =
-                r.used !== null && r.quota
-                  ? Math.min(100, Math.round((r.used / r.quota) * 100))
-                  : null;
-              return (
-                <tr key={`${r.provider}-${r.meter}-${r.subject}`}>
-                  <td className="project">
-                    {r.provider}
-                    {r.subject && <small>{r.subject}</small>}
-                  </td>
-                  <td>{label('meter', r.meter)}</td>
-                  <td>
-                    {r.used === null ? (
-                      <span className="mute small">
-                        {r.reason ? label('unavailableReason', r.reason) : '—'}
-                      </span>
-                    ) : (
-                      <span
-                        className={`meter ${percent !== null && percent >= 95 ? 'crit' : percent !== null && percent >= 80 ? 'warn' : ''}`}
-                        style={{ ['--value' as string]: `${percent ?? 0}%`, justifyItems: 'start' }}
-                      >
-                        <span className="figures">
-                          {figure(r.used)}
-                          {r.quota !== null ? ` / ${figure(r.quota)}` : ''} {r.unit}
+      <Card title={m.usage_meters()} icon="gauge">
+        {readings.length === 0 ? (
+          <p className="mute small mt-md">{m.usage_no_reading()}</p>
+        ) : (
+          <table className="table">
+            <thead>
+              <tr>
+                <th>{m.col_service()}</th>
+                <th>{m.col_meter()}</th>
+                <th>{m.col_use()}</th>
+                <th>{m.col_source()}</th>
+                <th className="num">{m.col_when()}</th>
+              </tr>
+            </thead>
+            <tbody>
+              {readings.map((r) => {
+                const percent =
+                  r.used !== null && r.quota
+                    ? Math.min(100, Math.round((r.used / r.quota) * 100))
+                    : null;
+                return (
+                  <tr key={`${r.provider}-${r.meter}-${r.subject}`}>
+                    <td className="project">
+                      {r.provider}
+                      {r.subject && <small>{r.subject}</small>}
+                    </td>
+                    <td>{label('meter', r.meter)}</td>
+                    <td>
+                      {r.used === null ? (
+                        <span className="mute small">
+                          {r.reason ? label('unavailableReason', r.reason) : '—'}
                         </span>
-                        {percent !== null && <i />}
-                      </span>
-                    )}
-                  </td>
-                  <td>
-                    <span className={`src ${r.source}`}>{label('source', r.source)}</span>
-                  </td>
-                  <td className="num small">{ago(r.readAt)}</td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
-      )}
+                      ) : (
+                        <span
+                          className={`meter ${percent !== null && percent >= 95 ? 'crit' : percent !== null && percent >= 80 ? 'warn' : ''}`}
+                          style={{
+                            ['--value' as string]: `${percent ?? 0}%`,
+                            justifyItems: 'start',
+                          }}
+                        >
+                          <span className="figures">
+                            {figure(r.used)}
+                            {r.quota !== null ? ` / ${figure(r.quota)}` : ''} {r.unit}
+                          </span>
+                          {percent !== null && <i />}
+                        </span>
+                      )}
+                    </td>
+                    <td>
+                      <span className={`src ${r.source}`}>{label('source', r.source)}</span>
+                    </td>
+                    <td className="num small">{ago(r.readAt)}</td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        )}
+      </Card>
 
-      <h3 className="section-title mono-label">{m.usage_subscriptions()}</h3>
-      {subscriptions.length === 0 ? (
-        <p className="mute small mt-md">{m.usage_no_subscription()}</p>
-      ) : (
-        <div className="list">
-          {subscriptions.map((s) => (
-            <div className="item" key={s.id}>
-              <div>
-                <h4>
-                  {s.service}
-                  {s.plan ? ` · ${s.plan}` : ''}
-                </h4>
-                <p>
-                  {money(s.priceMicros)}{' '}
-                  {s.cycle === 'year' ? m.usage_per_year() : m.usage_per_month()}
-                  {s.renewsOn ? ` · ${m.usage_renews({ date: s.renewsOn })}` : ''} ·{' '}
-                  <span className="src">{label('source', 'declared')}</span>
-                </p>
+      <Card title={m.usage_subscriptions()} icon="list">
+        {subscriptions.length === 0 ? (
+          <p className="mute small mt-md">{m.usage_no_subscription()}</p>
+        ) : (
+          <div className="list">
+            {subscriptions.map((s) => (
+              <div className="item" key={s.id}>
+                <div>
+                  <h4>
+                    {s.service}
+                    {s.plan ? ` · ${s.plan}` : ''}
+                  </h4>
+                  <p>
+                    {money(s.priceMicros)}{' '}
+                    {s.cycle === 'year' ? m.usage_per_year() : m.usage_per_month()}
+                    {s.renewsOn ? ` · ${m.usage_renews({ date: s.renewsOn })}` : ''} ·{' '}
+                    <span className="src">{label('source', 'declared')}</span>
+                  </p>
+                </div>
+                <div className="row">
+                  <button type="button" className="btn btn-ghost btn-xs" onClick={() => end(s.id)}>
+                    {m.usage_end()}
+                  </button>
+                </div>
               </div>
-              <div className="row">
-                <button type="button" className="btn btn-ghost btn-xs" onClick={() => end(s.id)}>
-                  {m.usage_end()}
-                </button>
-              </div>
-            </div>
-          ))}
-        </div>
-      )}
+            ))}
+          </div>
+        )}
+      </Card>
     </>
   );
 }

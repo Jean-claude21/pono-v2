@@ -3,6 +3,7 @@ import { useState, type FormEvent } from 'react';
 import { Shell } from '@/features/shell/Shell';
 import { api, useApi } from '@/lib/api';
 import { ago, label } from '@/lib/labels';
+import { Card } from '@/features/shell/ui';
 import * as m from '@/paraglide/messages.js';
 
 export const Route = createFileRoute('/agents')({
@@ -83,27 +84,28 @@ function Agents() {
             </div>
           ))}
       </div>
-      <h3 className="section-title mono-label">{m.agents_give()}</h3>
-      <form className="form" onSubmit={give}>
-        <div className="field">
-          <label htmlFor="agent-name">{m.agents_name()}</label>
-          <input id="agent-name" name="name" required maxLength={60} defaultValue="Claude Code" />
-        </div>
-        <fieldset className="choices">
-          <label className="choice">
-            <input type="radio" name="scope" value="read" defaultChecked />
-            <strong>{m.agents_scope_read()}</strong>
-          </label>
-          <label className="choice">
-            <input type="radio" name="scope" value="act" />
-            <strong>{m.agents_scope_act()}</strong>
-          </label>
-        </fieldset>
-        {error && <p className="small bad">{error}</p>}
-        <button type="submit" className="btn btn-primary btn-sm" style={{ justifySelf: 'start' }}>
-          {m.agents_give()}
-        </button>
-      </form>
+      <Card title={m.agents_give()} icon="key">
+        <form className="form" onSubmit={give}>
+          <div className="field">
+            <label htmlFor="agent-name">{m.agents_name()}</label>
+            <input id="agent-name" name="name" required maxLength={60} defaultValue="Claude Code" />
+          </div>
+          <fieldset className="choices">
+            <label className="choice">
+              <input type="radio" name="scope" value="read" defaultChecked />
+              <strong>{m.agents_scope_read()}</strong>
+            </label>
+            <label className="choice">
+              <input type="radio" name="scope" value="act" />
+              <strong>{m.agents_scope_act()}</strong>
+            </label>
+          </fieldset>
+          {error && <p className="small bad">{error}</p>}
+          <button type="submit" className="btn btn-primary btn-sm" style={{ justifySelf: 'start' }}>
+            {m.agents_give()}
+          </button>
+        </form>
+      </Card>
     </>
   );
 }

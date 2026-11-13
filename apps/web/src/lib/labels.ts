@@ -64,6 +64,11 @@ const tables: Record<string, Record<string, () => string>> = {
     failed: m.server_status_failed,
     released: m.server_status_released,
   },
+  level: {
+    guided: m.level_short_guided,
+    choosing: m.level_short_choosing,
+    expert: m.level_short_expert,
+  },
   plan: { free: m.plan_free, solo: m.plan_solo, pro: m.plan_pro },
   mode: { ask: m.mode_ask, auto: m.mode_auto, bypass: m.mode_bypass },
   verdict: { passed: m.verdict_passed, warned: m.verdict_warned, refused: m.verdict_refused },

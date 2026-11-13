@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { api, useApi } from '@/lib/api';
 import { ago, label, when } from '@/lib/labels';
+import { Card } from '@/features/shell/ui';
 import * as m from '@/paraglide/messages.js';
 
 interface GuardResult {
@@ -53,8 +54,7 @@ export function Releases({ projectId }: Readonly<{ projectId: string }>) {
   };
 
   return (
-    <section>
-      <h3 className="section-title mono-label">{m.releases_title()}</h3>
+    <Card title={m.releases_title()} icon="rocket">
       <div className="spread mt-md">
         <span className={`protection ${protection} small`}>
           ● {label('protection', protection)}
@@ -194,6 +194,6 @@ export function Releases({ projectId }: Readonly<{ projectId: string }>) {
           </div>
         ))
       )}
-    </section>
+    </Card>
   );
 }

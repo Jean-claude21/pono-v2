@@ -284,3 +284,14 @@ projet — un serveur de la personne elle-même.
 Un plugin Claude Code donne le serveur MCP de Pono, le contexte du projet à chaque début de session,
 une ligne de statut et des commandes. Pour Codex : le serveur MCP et `AGENTS.md`. Le script ne bloque
 jamais une session : sans Pono joignable, il se tait.
+
+## D-022 — La console : clair ou sombre, des cartes, la couleur ne dit que l'état
+
+**Tranché le 2026-11-13**, précise le système visuel de D-009.
+
+La console prend la structure de la maquette validée (`design/proposition/`) : barre latérale
+groupée, chemin en haut, recherche `Ctrl K`, cartes à trois chiffres, barres fines, onglets. Elle
+s'ouvre selon le réglage de l'ordinateur, clair ou sombre, et se change d'un clic. On garde les
+invariants : aucune couleur de marque, la couleur ne dit que l'état d'un projet (vert, bleu pour ce
+qui est en cours, ambre, rouge, gris), Inter Tight et JetBrains Mono, chiffres tabulaires, le bandeau
+verdict en tête de page. L'accueil s'adapte au niveau : la personne guidée voit l'essentiel.

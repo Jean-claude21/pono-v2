@@ -3,6 +3,7 @@ import { useState, type FormEvent } from 'react';
 import { Shell } from '@/features/shell/Shell';
 import { api, useApi, type ConnectionView } from '@/lib/api';
 import { label } from '@/lib/labels';
+import { Card } from '@/features/shell/ui';
 import * as m from '@/paraglide/messages.js';
 
 export const Route = createFileRoute('/connections')({
@@ -35,19 +36,20 @@ function Connections() {
       </div>
       {kinds.map((kind) => (
         <section key={kind}>
-          <h3 className="section-title mono-label">{label('kind', kind)}</h3>
-          <div className="list">
-            {available
-              .filter((a) => a.kind === kind)
-              .map((a) => (
-                <Provider
-                  key={a.provider}
-                  available={a}
-                  connection={connections.find((c) => c.provider === a.provider)}
-                  onChange={data.reload}
-                />
-              ))}
-          </div>
+          <Card title={label('kind', kind)} icon="plug">
+            <div className="list">
+              {available
+                .filter((a) => a.kind === kind)
+                .map((a) => (
+                  <Provider
+                    key={a.provider}
+                    available={a}
+                    connection={connections.find((c) => c.provider === a.provider)}
+                    onChange={data.reload}
+                  />
+                ))}
+            </div>
+          </Card>
         </section>
       ))}
     </>

@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { api, useApi } from '@/lib/api';
 import { figure, label } from '@/lib/labels';
+import { Card } from '@/features/shell/ui';
 import * as m from '@/paraglide/messages.js';
 
 type Metrics =
@@ -33,10 +34,11 @@ export function ProjectVisits({ projectId }: Readonly<{ projectId: string }>) {
   const metrics = data.result.data;
 
   return (
-    <section>
-      <div className="spread">
-        <h3 className="section-title mono-label">{m.visits_title()}</h3>
-        <div className="row">
+    <Card
+      title={m.visits_title()}
+      icon="chart"
+      tools={
+        <>
           {PERIODS.map((p) => (
             <button
               key={p}
@@ -47,8 +49,9 @@ export function ProjectVisits({ projectId }: Readonly<{ projectId: string }>) {
               {m.visits_days({ days: String(p) })}
             </button>
           ))}
-        </div>
-      </div>
+        </>
+      }
+    >
       {metrics.source === 'unavailable' ? (
         <>
           <p className="mute small mt-md">
@@ -125,7 +128,7 @@ export function ProjectVisits({ projectId }: Readonly<{ projectId: string }>) {
           </div>
         </>
       )}
-    </section>
+    </Card>
   );
 }
 

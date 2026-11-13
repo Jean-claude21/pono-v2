@@ -4,6 +4,7 @@ import { LevelChooser, type Level } from '@/features/shell/LevelChooser';
 import { Shell } from '@/features/shell/Shell';
 import { api, useApi } from '@/lib/api';
 import { label, money } from '@/lib/labels';
+import { Card } from '@/features/shell/ui';
 import * as m from '@/paraglide/messages.js';
 
 export const Route = createFileRoute('/settings')({
@@ -42,36 +43,40 @@ function Settings() {
       <div className="topline">
         <h1>{m.settings_title()}</h1>
       </div>
-      <h3 className="section-title mono-label">{m.settings_level()}</h3>
-      {me.result?.ok && <LevelChooser current={me.result.data.person.level} onChosen={me.reload} />}
-      <h3 className="section-title mono-label">{m.settings_plan()}</h3>
-      {provider === 'none' && <p className="notice">{m.settings_billing_none()}</p>}
-      {error && <p className="notice warning">{error}</p>}
-      <div className="plans">
-        {plans.map((p) => (
-          <div className={`plan ${p.id === plan ? 'current' : ''}`} key={p.id}>
-            <h3>{label('plan', p.id)}</h3>
-            <div className="price">{money(p.priceMicros)}</div>
-            <ul>
-              <li>{m.settings_servers({ count: String(p.activeServers) })}</li>
-            </ul>
-            {p.id === plan ? (
-              <span className="mono-label">{m.settings_current()}</span>
-            ) : (
-              p.priceMicros > 0 && (
-                <button
-                  type="button"
-                  className="btn btn-primary btn-sm"
-                  disabled={provider === 'none'}
-                  onClick={() => choose(p.id)}
-                >
-                  {m.settings_choose()}
-                </button>
-              )
-            )}
-          </div>
-        ))}
-      </div>
+      <Card title={m.settings_level()} icon="settings">
+        {me.result?.ok && (
+          <LevelChooser current={me.result.data.person.level} onChosen={me.reload} />
+        )}
+      </Card>
+      <Card title={m.settings_plan()} icon="gauge">
+        {provider === 'none' && <p className="notice">{m.settings_billing_none()}</p>}
+        {error && <p className="notice warning">{error}</p>}
+        <div className="plans">
+          {plans.map((p) => (
+            <div className={`plan ${p.id === plan ? 'current' : ''}`} key={p.id}>
+              <h3>{label('plan', p.id)}</h3>
+              <div className="price">{money(p.priceMicros)}</div>
+              <ul>
+                <li>{m.settings_servers({ count: String(p.activeServers) })}</li>
+              </ul>
+              {p.id === plan ? (
+                <span className="mono-label">{m.settings_current()}</span>
+              ) : (
+                p.priceMicros > 0 && (
+                  <button
+                    type="button"
+                    className="btn btn-primary btn-sm"
+                    disabled={provider === 'none'}
+                    onClick={() => choose(p.id)}
+                  >
+                    {m.settings_choose()}
+                  </button>
+                )
+              )}
+            </div>
+          ))}
+        </div>
+      </Card>
     </>
   );
 }

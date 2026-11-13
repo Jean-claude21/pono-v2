@@ -5,6 +5,7 @@ import { LimitChooser, type LimitDetail } from '@/features/servers/LimitChooser'
 import { Shell } from '@/features/shell/Shell';
 import { api, useApi } from '@/lib/api';
 import { label } from '@/lib/labels';
+import { Card } from '@/features/shell/ui';
 import * as m from '@/paraglide/messages.js';
 import { getLocale } from '@/paraglide/runtime.js';
 
@@ -47,51 +48,53 @@ function Catalog() {
         </div>
       </div>
       {chosen && <Launch template={chosen} locale={locale} onCancel={() => setChosen(null)} />}
-      <h3 className="section-title mono-label">{m.catalog_templates()}</h3>
-      <div className="tiles">
-        {templates.result?.ok &&
-          templates.result.data.templates.map((t) => (
-            <button
-              type="button"
-              className="tile"
-              key={t.id}
-              aria-pressed={chosen?.id === t.id}
-              onClick={() => setChosen(t)}
-            >
-              <span className="mono-label">
-                {label('category', t.category)}
-                {t.scope && t.scope !== 'pono' ? ` · ${label('scope', t.scope)}` : ''}
-              </span>
-              <h4>{t.name[locale]}</h4>
-              <p>{t.description[locale]}</p>
-              <div className="row">
-                {t.stack.map((s) => (
-                  <span className="tag" key={s}>
-                    {s}
-                  </span>
-                ))}
-              </div>
-            </button>
-          ))}
-      </div>
-      <h3 className="section-title mono-label">{m.catalog_skills()}</h3>
-      <table className="table">
-        <tbody>
-          {skills.result?.ok &&
-            skills.result.data.skills.map((s) => (
-              <tr key={s.name}>
-                <td className="project figures">{s.name}</td>
-                <td className="small soft">{s.description}</td>
-                <td className="small mute">
-                  {label('family', s.family)} · {label('scope', s.scope)}
-                </td>
-              </tr>
+      <Card title={m.catalog_templates()} icon="folder">
+        <div className="tiles">
+          {templates.result?.ok &&
+            templates.result.data.templates.map((t) => (
+              <button
+                type="button"
+                className="tile"
+                key={t.id}
+                aria-pressed={chosen?.id === t.id}
+                onClick={() => setChosen(t)}
+              >
+                <span className="mono-label">
+                  {label('category', t.category)}
+                  {t.scope && t.scope !== 'pono' ? ` · ${label('scope', t.scope)}` : ''}
+                </span>
+                <h4>{t.name[locale]}</h4>
+                <p>{t.description[locale]}</p>
+                <div className="row">
+                  {t.stack.map((s) => (
+                    <span className="tag" key={s}>
+                      {s}
+                    </span>
+                  ))}
+                </div>
+              </button>
             ))}
-        </tbody>
-      </table>
-      {skills.result?.ok && (
-        <OwnSkills skills={skills.result.data.skills} onChange={skills.reload} />
-      )}
+        </div>
+      </Card>
+      <Card title={m.catalog_skills()} icon="book">
+        <table className="table">
+          <tbody>
+            {skills.result?.ok &&
+              skills.result.data.skills.map((s) => (
+                <tr key={s.name}>
+                  <td className="project figures">{s.name}</td>
+                  <td className="small soft">{s.description}</td>
+                  <td className="small mute">
+                    {label('family', s.family)} · {label('scope', s.scope)}
+                  </td>
+                </tr>
+              ))}
+          </tbody>
+        </table>
+        {skills.result?.ok && (
+          <OwnSkills skills={skills.result.data.skills} onChange={skills.reload} />
+        )}
+      </Card>
     </>
   );
 }

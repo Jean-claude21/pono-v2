@@ -3,6 +3,7 @@ import { AdminCatalog } from '@/features/admin/AdminCatalog';
 import { Shell } from '@/features/shell/Shell';
 import { api, useApi } from '@/lib/api';
 import { ago, label, money } from '@/lib/labels';
+import { Card } from '@/features/shell/ui';
 import * as m from '@/paraglide/messages.js';
 
 export const Route = createFileRoute('/admin')({
@@ -101,75 +102,77 @@ function Admin() {
         </div>
       </div>
 
-      <h3 className="section-title mono-label">{m.admin_organizations()}</h3>
-      <table className="table">
-        <thead>
-          <tr>
-            <th>{m.col_organization()}</th>
-            <th>{m.col_plan()}</th>
-            <th className="num">{m.admin_projects()}</th>
-            <th className="num">{m.col_servers()}</th>
-            <th className="num">{m.col_cost()}</th>
-            <th className="num">{m.admin_revenue()}</th>
-          </tr>
-        </thead>
-        <tbody>
-          {orgs.result?.ok &&
-            orgs.result.data.organizations.map((org) => (
-              <tr key={org.id}>
-                <td className="project">{org.name}</td>
-                <td>{label('plan', org.plan)}</td>
-                <td className="num figures">{org.projects}</td>
-                <td className="num figures">
-                  {org.activeServers} / {org.activeServers + org.sleepingServers}
-                </td>
-                <td className="num figures">{money(org.serverMicros)}</td>
-                <td className="num figures">{money(org.revenueMicros)}</td>
-              </tr>
-            ))}
-        </tbody>
-      </table>
+      <Card title={m.admin_organizations()} icon="shield">
+        <table className="table">
+          <thead>
+            <tr>
+              <th>{m.col_organization()}</th>
+              <th>{m.col_plan()}</th>
+              <th className="num">{m.admin_projects()}</th>
+              <th className="num">{m.col_servers()}</th>
+              <th className="num">{m.col_cost()}</th>
+              <th className="num">{m.admin_revenue()}</th>
+            </tr>
+          </thead>
+          <tbody>
+            {orgs.result?.ok &&
+              orgs.result.data.organizations.map((org) => (
+                <tr key={org.id}>
+                  <td className="project">{org.name}</td>
+                  <td>{label('plan', org.plan)}</td>
+                  <td className="num figures">{org.projects}</td>
+                  <td className="num figures">
+                    {org.activeServers} / {org.activeServers + org.sleepingServers}
+                  </td>
+                  <td className="num figures">{money(org.serverMicros)}</td>
+                  <td className="num figures">{money(org.revenueMicros)}</td>
+                </tr>
+              ))}
+          </tbody>
+        </table>
+      </Card>
 
-      <h3 className="section-title mono-label">{m.col_servers()}</h3>
-      <table className="table">
-        <thead>
-          <tr>
-            <th>{m.col_project()}</th>
-            <th>{m.col_state()}</th>
-            <th>{m.col_size()}</th>
-            <th className="num">{m.col_cost()}</th>
-            <th className="num" />
-          </tr>
-        </thead>
-        <tbody>
-          {servers.result?.ok &&
-            servers.result.data.servers.map((s) => (
-              <tr key={s.id}>
-                <td className="project">
-                  {s.project}
-                  <small>{s.organization}</small>
-                </td>
-                <td>
-                  {label('serverStatus', s.status)}{' '}
-                  <span className="tiny mute">{ago(s.statusAt)}</span>
-                </td>
-                <td className="figures tiny">{s.size}</td>
-                <td className="num figures">{money(s.monthlyMicros)}</td>
-                <td className="num">
-                  {s.status === 'running' && (
-                    <button
-                      type="button"
-                      className="btn btn-ghost btn-xs"
-                      onClick={() => sleep(s.id)}
-                    >
-                      {m.servers_sleep()}
-                    </button>
-                  )}
-                </td>
-              </tr>
-            ))}
-        </tbody>
-      </table>
+      <Card title={m.col_servers()} icon="server">
+        <table className="table">
+          <thead>
+            <tr>
+              <th>{m.col_project()}</th>
+              <th>{m.col_state()}</th>
+              <th>{m.col_size()}</th>
+              <th className="num">{m.col_cost()}</th>
+              <th className="num" />
+            </tr>
+          </thead>
+          <tbody>
+            {servers.result?.ok &&
+              servers.result.data.servers.map((s) => (
+                <tr key={s.id}>
+                  <td className="project">
+                    {s.project}
+                    <small>{s.organization}</small>
+                  </td>
+                  <td>
+                    {label('serverStatus', s.status)}{' '}
+                    <span className="tiny mute">{ago(s.statusAt)}</span>
+                  </td>
+                  <td className="figures tiny">{s.size}</td>
+                  <td className="num figures">{money(s.monthlyMicros)}</td>
+                  <td className="num">
+                    {s.status === 'running' && (
+                      <button
+                        type="button"
+                        className="btn btn-ghost btn-xs"
+                        onClick={() => sleep(s.id)}
+                      >
+                        {m.servers_sleep()}
+                      </button>
+                    )}
+                  </td>
+                </tr>
+              ))}
+          </tbody>
+        </table>
+      </Card>
       <AdminCatalog />
     </>
   );
