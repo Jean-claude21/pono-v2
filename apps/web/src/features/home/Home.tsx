@@ -49,8 +49,6 @@ const FAQ = [
   { q: m.home_q4, a: m.home_a4 },
 ];
 
-const MCP_COMMAND = 'claude mcp add --transport http pono https://pono.kete.digital/mcp';
-
 function price(amount: number, cents = false): string {
   return new Intl.NumberFormat(getLocale(), {
     style: 'currency',
@@ -214,17 +212,19 @@ export function Home() {
               <code>
                 <span className="mute"># {m.home_agents_comment()}</span>
                 {'\n'}
-                {MCP_COMMAND}
-                {' \\\n  --header "Authorization: Bearer pono_…"'}
+                {'https://pono.kete.digital/mcp'}
                 {'\n\n'}
-                <span className="mute">{'>'} </span>
+                <span className="mute">{'> '}</span>
                 {'resume_project boutique-lome'}
+                {'\n'}
+                <span className="mute">{'> '}</span>
+                {'edit_file src/pages/contact.tsx'}
                 {'\n'}
                 <span className="ok">{'✓ '}</span>
                 {'https://boutique-lome.preview.pono.kete.digital'}
                 {'\n'}
-                <span className="mute">{'>'} </span>
-                {'propose_release'}
+                <span className="mute">{'> '}</span>
+                {'push_changes · propose_release'}
                 {'\n'}
                 <span className="ok">{'✓ '}</span>
                 {'PR #42 → main'}

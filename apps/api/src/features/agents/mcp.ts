@@ -16,7 +16,17 @@ import {
 } from '../catalog/index.js';
 import { launchProject, type LaunchDeps } from '../launch/index.js';
 import { siteMetrics } from '../analytics/index.js';
-import { devStatus, pullChanges, pushChanges, startDev, stopDev } from '../devloop/index.js';
+import {
+  codeOn,
+  devStatus,
+  jobOutput,
+  LIMITS,
+  pullChanges,
+  pushChanges,
+  runOn,
+  startDev,
+  stopDev,
+} from '../devloop/index.js';
 import { checkSecrets, listVariables, requestVariable, variableName } from '../variables/index.js';
 import { activeCredentials } from '../connections/index.js';
 import { LEVEL_GUIDANCE, LEVELS, levelOf, setLevel } from '../identity/index.js';
@@ -40,7 +50,14 @@ continue X », or « continue this project » inside a folder, call find_project
 the folder's git remote as repository, then resume_project. A repository Pono does not know yet, in any
 technology, joins with adopt_project. If find_project answers ambiguous, ask
 the person which one; never guess. Never ask for a key in the conversation: keys are set in the
-console. You never validate a release nor roll back: you propose, a person decides.`;
+console. You never validate a release nor roll back: you propose, a person decides.
+
+You can code without any machine of your own: each project has a server where its repository lives
+on the dev branch. Call start_dev once (it answers the preview address), then work there with
+list_files, search_code, read_file, edit_file, write_file and run_command. Read a file before you
+edit it: edit_file needs old_text exactly as read. The preview reloads by itself: give its address
+to the person after a visible change. Look at show_changes, then push_changes to save the work on
+dev; propose_release when the person wants it in production.`;
 
 type Text = { content: { type: 'text'; text: string }[]; isError?: boolean };
 
@@ -346,6 +363,179 @@ function buildServer(deps: McpDeps, actor: Actor, scope: 'read' | 'act'): McpSer
       annotations: act,
     },
     async ({ projectId, message }) => acting(() => pushChanges(deps, actor, projectId, message)),
+  );
+
+  const project = {
+    projectId: z.string().describe('The project, from list_projects or find_project.'),
+  };
+
+  server.registerTool(
+    'list_files',
+    {
+      description:
+        "The repository's files on the project's server (tracked and new, never ignored ones such as node_modules). Narrow with a folder and a glob such as src/**/*.tsx.",
+      inputSchema: {
+        ...project,
+        path: z.string().optional().describe('A folder, relative to the repository.'),
+        pattern: z.string().optional().describe('A glob on the path or the file name.'),
+      },
+      annotations: read,
+    },
+    async ({ projectId, path, pattern }) =>
+      guard(() =>
+        codeOn(deps, actor, projectId, {
+          op: 'list',
+          path: path ?? null,
+          pattern: pattern ?? null,
+        }),
+      ),
+  );
+
+  server.registerTool(
+    'read_file',
+    {
+      description: `A file of the repository on the project's server, its lines numbered. Long files: read them by ranges with offset and limit (at most ${LIMITS.readLines} lines).`,
+      inputSchema: {
+        ...project,
+        path: z.string(),
+        offset: z.number().int().min(1).default(1).describe('The first line, from 1.'),
+        limit: z.number().int().min(1).max(LIMITS.readLines).default(LIMITS.readLines),
+      },
+      annotations: read,
+    },
+    async ({ projectId, path, offset, limit }) =>
+      guard(() => codeOn(deps, actor, projectId, { op: 'read', path, offset, limit })),
+  );
+
+  server.registerTool(
+    'search_code',
+    {
+      description:
+        'Lines that match a regular expression in the repository, with file and line number. Narrow with a folder or a glob.',
+      inputSchema: {
+        ...project,
+        pattern: z.string().min(1).max(500),
+        path: z.string().optional(),
+        glob: z.string().optional(),
+        ignoreCase: z.boolean().default(false),
+      },
+      annotations: read,
+    },
+    async ({ projectId, pattern, path, glob, ignoreCase }) =>
+      guard(() =>
+        codeOn(deps, actor, projectId, {
+          op: 'search',
+          pattern,
+          path: path ?? null,
+          glob: glob ?? null,
+          ignoreCase,
+        }),
+      ),
+  );
+
+  server.registerTool(
+    'edit_file',
+    {
+      description:
+        'Changes a file by exact replacements: each old_text must appear exactly once (or set replace_all), spaces and indentation included. All edits apply, or none. Answers the diff; dry_run shows it without writing.',
+      inputSchema: {
+        ...project,
+        path: z.string(),
+        edits: z
+          .array(
+            z.object({
+              old_text: z.string().min(1),
+              new_text: z.string(),
+              replace_all: z.boolean().default(false),
+            }),
+          )
+          .min(1)
+          .max(50),
+        dry_run: z.boolean().default(false),
+      },
+      annotations: act,
+    },
+    async ({ projectId, path, edits, dry_run }) =>
+      acting(() =>
+        codeOn(deps, actor, projectId, {
+          op: 'edit',
+          path,
+          dryRun: dry_run,
+          edits: edits.map((e) => ({ old: e.old_text, new: e.new_text, all: e.replace_all })),
+        }),
+      ),
+  );
+
+  server.registerTool(
+    'write_file',
+    {
+      description:
+        'Creates a file, or replaces it whole (its folders are created). Prefer edit_file to change part of an existing file. Answers the diff.',
+      inputSchema: { ...project, path: z.string(), content: z.string().max(LIMITS.writeChars) },
+      annotations: act,
+    },
+    async ({ projectId, path, content }) =>
+      acting(() => codeOn(deps, actor, projectId, { op: 'write', path, content })),
+  );
+
+  server.registerTool(
+    'move_file',
+    {
+      description: 'Moves or renames a file; refused when the destination exists.',
+      inputSchema: { ...project, path: z.string(), to: z.string() },
+      annotations: act,
+    },
+    async ({ projectId, path, to }) =>
+      acting(() => codeOn(deps, actor, projectId, { op: 'move', path, to })),
+  );
+
+  server.registerTool(
+    'delete_file',
+    {
+      description: 'Deletes one file of the repository on the server (git keeps its history).',
+      inputSchema: { ...project, path: z.string() },
+      annotations: { ...act, destructiveHint: true },
+    },
+    async ({ projectId, path }) =>
+      acting(() => codeOn(deps, actor, projectId, { op: 'delete', path })),
+  );
+
+  server.registerTool(
+    'show_changes',
+    {
+      description:
+        'What changed on the server since the last push: the files and the diff. Look at it before push_changes.',
+      inputSchema: project,
+      annotations: read,
+    },
+    async ({ projectId }) => guard(() => codeOn(deps, actor, projectId, { op: 'changes' })),
+  );
+
+  server.registerTool(
+    'run_command',
+    {
+      description: `Runs a shell command in the repository on the project's server: install a package, run the tests, build, lint. At most ${LIMITS.seconds} seconds; its output's end is kept. With background, it answers a job at once: read it with command_output. The dev server itself is start_dev's.`,
+      inputSchema: {
+        ...project,
+        command: z.string().min(1).max(4000),
+        timeout_seconds: z.number().int().min(1).max(LIMITS.seconds).default(120),
+        background: z.boolean().default(false),
+      },
+      annotations: act,
+    },
+    async ({ projectId, command, timeout_seconds, background }) =>
+      acting(() => runOn(deps, actor, projectId, command, timeout_seconds, background)),
+  );
+
+  server.registerTool(
+    'command_output',
+    {
+      description:
+        "A background command's output so far, and its exit code once it ended (124: its time ran out).",
+      inputSchema: { ...project, job: z.string() },
+      annotations: read,
+    },
+    async ({ projectId, job }) => guard(() => jobOutput(deps, actor, projectId, job)),
   );
 
   server.registerTool(
