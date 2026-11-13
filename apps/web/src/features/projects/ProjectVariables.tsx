@@ -1,6 +1,7 @@
 import { useState, type FormEvent } from 'react';
 import { api, useApi } from '@/lib/api';
 import { ago, label } from '@/lib/labels';
+import { Card } from '@/features/shell/ui';
 import * as m from '@/paraglide/messages.js';
 
 interface Variable {
@@ -41,8 +42,7 @@ export function ProjectVariables({ projectId }: Readonly<{ projectId: string }>)
   };
 
   return (
-    <section>
-      <h3 className="section-title mono-label">{m.variables_title()}</h3>
+    <Card title={m.variables_title()} icon="key">
       <p className="mute small mt-sm">{m.variables_rule()}</p>
       {variables.length > 0 && (
         <table className="table">
@@ -123,6 +123,6 @@ export function ProjectVariables({ projectId }: Readonly<{ projectId: string }>)
         </button>
       </form>
       {error && <p className="notice mt-md">{error}</p>}
-    </section>
+    </Card>
   );
 }

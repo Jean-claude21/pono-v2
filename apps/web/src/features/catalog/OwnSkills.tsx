@@ -48,14 +48,15 @@ export function OwnSkills({
   return (
     <>
       <div className="spread">
-        <h3 className="section-title mono-label">{m.catalog_own_skills()}</h3>
-        <button type="button" className="btn btn-ghost btn-sm" onClick={() => setOpen(!open)}>
+        <p className="mute small" style={{ flex: 1, minWidth: 220 }}>
+          {m.catalog_own_skills_body()}
+        </p>
+        <button type="button" className="btn btn-primary btn-sm" onClick={() => setOpen(!open)}>
           {m.catalog_new_skill()}
         </button>
       </div>
-      <p className="mute small">{m.catalog_own_skills_body()}</p>
       {open && (
-        <form className="form panel mt-md" onSubmit={submit}>
+        <form className="form mt-md" onSubmit={submit}>
           <div className="field">
             <label htmlFor="skill-name">{m.launch_name()}</label>
             <input id="skill-name" name="name" required pattern="[a-z0-9][a-z0-9-]{1,48}" />
@@ -86,13 +87,16 @@ export function OwnSkills({
         </form>
       )}
       {error && <p className="notice mt-md">{error}</p>}
+      {own.length === 0 && !open && <p className="empty">{m.catalog_own_none()}</p>}
       {own.length > 0 && (
-        <table className="table">
+        <table className="table mt-md">
           <tbody>
             {own.map((s) => (
               <tr key={s.name}>
                 <td className="project figures">{s.name}</td>
-                <td className="small">{label('scope', s.scope)}</td>
+                <td className="small">
+                  <span className="tag">{label('scope', s.scope)}</span>
+                </td>
                 <td className="num">
                   {s.scope !== 'proposed' && (
                     <button

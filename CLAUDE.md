@@ -17,7 +17,8 @@ prêt pour chaque projet lancé, et une production qui obéit à la règle chois
 
 ## Phase en cours
 
-Phases 0 à 15 codées et testées (`specs/001` à `017`) ; prouvées en local contre les vrais
+Phases 0 à 17 codées et testées (`specs/001` à `019`, dont la console au nouveau design, D-022, la page
+publique, D-025, et le déploiement, D-024) ; prouvées en local contre les vrais
 fournisseurs, dont trois personnes et trois serveurs Agent37 réels. Restent les gestes de l'auteur
 listés dans `docs/ROADMAP.md` (application GitHub, domaine, Stripe, Umami, Resend, Coolify), puis le
 déploiement et les preuves en ligne.

@@ -20,6 +20,10 @@ const schema = z.object({
   /** A server's spending cap for a month, in USD. */
   PONO_SERVER_BUDGET_USD: z.coerce.number().min(0).default(5),
   /** Idle minutes before a server sleeps. */
+  /** Moneroo (D-023): one-off payments, preferred over Stripe when both are set. */
+  MONEROO_SECRET_KEY: z.string().min(1).optional(),
+  MONEROO_WEBHOOK_SECRET: z.string().min(1).optional(),
+  PONO_MONEROO_CURRENCY: z.string().length(3).default('USD'),
   STRIPE_SECRET_KEY: z.string().min(1).optional(),
   STRIPE_WEBHOOK_SECRET: z.string().min(1).optional(),
   PONO_STRIPE_PRICE_SOLO: z.string().min(1).optional(),
@@ -47,7 +51,11 @@ export class ConfigError extends Error {
 }
 
 export function loadConfig(env: Record<string, string | undefined> = process.env): Config {
-  const parsed = schema.safeParse(env);
+  // An empty variable is an absent one: `KEY=` in an env file must not break the start.
+  const present = Object.fromEntries(
+    Object.entries(env).filter(([, v]) => v !== undefined && v !== ''),
+  );
+  const parsed = schema.safeParse(present);
   if (!parsed.success) {
     const variables = [...new Set(parsed.error.issues.map((issue) => String(issue.path[0])))];
     throw new ConfigError(variables);

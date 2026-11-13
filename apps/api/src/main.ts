@@ -14,6 +14,7 @@ import {
   stripeBilling,
   unavailableBilling,
 } from './infrastructure/providers/stripe.js';
+import { monerooBilling } from './infrastructure/providers/moneroo.js';
 import { unavailableServerHost } from './infrastructure/providers/no-server-host.js';
 import { cloudflareHosting } from './infrastructure/providers/cloudflare.js';
 import { githubCodeHost } from './infrastructure/providers/github.js';
@@ -83,24 +84,31 @@ const deps: AppDeps = {
   serverIdleSeconds: config.PONO_SERVER_IDLE_MINUTES * 60,
   catalog: loadCatalog(),
   billing:
-    config.STRIPE_SECRET_KEY &&
-    config.STRIPE_WEBHOOK_SECRET &&
-    config.PONO_STRIPE_PRICE_SOLO &&
-    config.PONO_STRIPE_PRICE_PRO
-      ? stripeBilling({
-          secretKey: config.STRIPE_SECRET_KEY,
-          webhookSecret: config.STRIPE_WEBHOOK_SECRET,
-          prices: { solo: config.PONO_STRIPE_PRICE_SOLO, pro: config.PONO_STRIPE_PRICE_PRO },
+    config.MONEROO_SECRET_KEY && config.MONEROO_WEBHOOK_SECRET
+      ? monerooBilling({
+          secretKey: config.MONEROO_SECRET_KEY,
+          webhookSecret: config.MONEROO_WEBHOOK_SECRET,
+          currency: config.PONO_MONEROO_CURRENCY,
           fetch,
         })
-      : config.PONO_DEV_SIGN_IN === '1'
-        ? devBilling({
-            secret: config.PONO_SECRETS_KEY,
-            publicUrl: config.PONO_PUBLIC_URL,
-            apiUrl: config.PONO_API_URL,
+      : config.STRIPE_SECRET_KEY &&
+          config.STRIPE_WEBHOOK_SECRET &&
+          config.PONO_STRIPE_PRICE_SOLO &&
+          config.PONO_STRIPE_PRICE_PRO
+        ? stripeBilling({
+            secretKey: config.STRIPE_SECRET_KEY,
+            webhookSecret: config.STRIPE_WEBHOOK_SECRET,
+            prices: { solo: config.PONO_STRIPE_PRICE_SOLO, pro: config.PONO_STRIPE_PRICE_PRO },
             fetch,
           })
-        : unavailableBilling(),
+        : config.PONO_DEV_SIGN_IN === '1'
+          ? devBilling({
+              secret: config.PONO_SECRETS_KEY,
+              publicUrl: config.PONO_PUBLIC_URL,
+              apiUrl: config.PONO_API_URL,
+              fetch,
+            })
+          : unavailableBilling(),
   admins: config.PONO_ADMIN_LOGINS.split(',')
     .map((l) => l.trim())
     .filter(Boolean),

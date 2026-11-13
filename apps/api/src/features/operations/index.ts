@@ -81,6 +81,8 @@ export async function runCycle(deps: OperationsDeps, only?: string[]): Promise<C
     notified: 0,
     failures: 0,
   };
+  // Paid periods that ended go back to the free plan first (D-023).
+  await deps.pool.query('SELECT expire_paid_plans()').catch(() => undefined);
   const orgs = (
     await deps.pool.query<{ id: string }>('SELECT id FROM system_organizations()')
   ).rows.filter((o) => !only || only.includes(o.id));

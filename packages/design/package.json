@@ -3,6 +3,6 @@
   "version": "0.1.0",
   "private": true,
   "description": "Pono's visual system: the single source of tokens and components (D-009).",
-  "exports": { "./style.css": "./style.css", "./console.css": "./console.css", "./fonts/*": "./fonts/*" },
-  "files": ["style.css", "console.css", "fonts"]
+  "exports": { "./style.css": "./style.css", "./console.css": "./console.css", "./home.css": "./home.css", "./fonts/*": "./fonts/*" },
+  "files": ["style.css", "console.css", "home.css", "fonts"]
 }

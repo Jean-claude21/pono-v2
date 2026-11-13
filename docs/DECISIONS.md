@@ -284,3 +284,48 @@ projet — un serveur de la personne elle-même.
 Un plugin Claude Code donne le serveur MCP de Pono, le contexte du projet à chaque début de session,
 une ligne de statut et des commandes. Pour Codex : le serveur MCP et `AGENTS.md`. Le script ne bloque
 jamais une session : sans Pono joignable, il se tait.
+
+## D-022 — La console : clair ou sombre, des cartes, la couleur ne dit que l'état
+
+**Tranché le 2026-11-13**, précise le système visuel de D-009.
+
+La console prend la structure de la maquette validée (`design/proposition/`) : barre latérale
+groupée, chemin en haut, recherche `Ctrl K`, cartes à trois chiffres, barres fines, onglets. Elle
+s'ouvre selon le réglage de l'ordinateur, clair ou sombre, et se change d'un clic. On garde les
+invariants : aucune couleur de marque, la couleur ne dit que l'état d'un projet (vert, bleu pour ce
+qui est en cours, ambre, rouge, gris), Inter Tight et JetBrains Mono, chiffres tabulaires, le bandeau
+verdict en tête de page. L'accueil s'adapte au niveau : la personne guidée voit l'essentiel.
+
+---
+
+## D-023 — Les plans se paient par Moneroo, une période à la fois
+
+**Tranché le 2026-11-13**, remplace Stripe comme moyen par défaut (D-013 reste vrai pour le reste).
+
+Moneroo encaisse Mobile Money et carte, mais pas d'abonnement. Un paiement achète trente jours du
+plan ; un second paiement prolonge la période. Le webhook signé (`X-Moneroo-Signature`) ne fait que
+prévenir : Pono relit le paiement chez Moneroo (statut, montant, devise, organisation) avant de
+changer un plan, et compte chaque paiement une seule fois. La tâche périodique remet au plan gratuit
+toute période finie. Stripe reste branché si Moneroo n'est pas configuré.
+
+**Ce que ça coûte.** Pas de prélèvement automatique : la personne repaie chaque mois. Un rappel avant
+la fin de la période reste à faire.
+
+## D-024 — Pono tient dans une image, derrière une seule adresse
+
+**Tranché le 2026-11-13.**
+
+Une image Docker porte la console et l'API. Seule la console est exposée ; elle relaie `/auth`,
+`/v1`, `/oauth`, `/mcp` et les webhooks signés (`/hooks/*`, `/billing/webhook`) vers l'API, sur la
+même machine. Au démarrage, les migrations passent avec le rôle propriétaire, puis l'API et la
+console partent ; si l'une s'arrête, le conteneur s'arrête et l'hébergeur le relance. Pono tourne sur
+le Coolify de l'auteur, base sur Neon.
+
+## D-025 — Une page publique qui montre l'atelier avant d'en parler
+
+**Tranché le 2026-11-13.**
+
+À l'adresse de Pono, une personne non connectée voit la page publique : la promesse, une vue de
+l'atelier dessinée avec les pièces de la console (le verdict en tête), ce que Pono fait, trois
+étapes, les agents, les tarifs, les questions. Aucune image générée : l'atelier lui-même est la
+meilleure illustration, et le système reste sans couleur de marque.
