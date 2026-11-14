@@ -4,6 +4,7 @@
  * filesystem server, Desktop Commander): line-numbered reads by range, exact edits applied all or
  * nothing with a diff, content search apart from name search, every output bounded.
  */
+import { readFileSync } from 'node:fs';
 import { q, workdir } from './domain.js';
 
 /** Most a single answer carries back, so a conversation stays readable. */
@@ -11,7 +12,9 @@ export const LIMITS = {
   readLines: 2000,
   lineChars: 2000,
   files: 1000,
-  matches: 300,
+  matches: 100,
+  mapChars: 12_000,
+  undo: 10,
   diffChars: 30_000,
   writeChars: 400_000,
   outputChars: 20_000,
@@ -36,64 +39,11 @@ export function safePath(path: string): string | null {
 }
 
 /**
- * The one script the server runs for every file operation: its input arrives base64-encoded in an
- * environment variable, never through the shell's quoting, and it answers one JSON line.
+ * The one script the server runs for every file operation (`toolbox.cjs`): its input arrives
+ * base64-encoded in an environment variable, never through the shell's quoting, and it answers one
+ * JSON line.
  */
-const SCRIPT = String.raw`
-const fs=require('fs'),p=require('path'),cp=require('child_process');
-const I=JSON.parse(Buffer.from(process.env.PONO_IN,'base64').toString());
-const L=I.limits;
-const out=v=>{console.log(JSON.stringify(v));process.exit(0)};
-const git=a=>cp.spawnSync('git',a,{encoding:'utf8',maxBuffer:64e6});
-const inside=f=>{const r=p.resolve(f);return r.startsWith(process.cwd()+p.sep)};
-for(const f of [I.path,I.to].filter(Boolean)) if(!inside(f)) out({error:'outside',path:f});
-const files=()=>git(['ls-files','--cached','--others','--exclude-standard']).stdout.split('\n').filter(Boolean);
-const glob=g=>{let r='';for(let i=0;i<g.length;i++){const c=g[i];
-  if(c==='*'){if(g[i+1]==='*'){r+='.*';i++;if(g[i+1]==='/')i++}else r+='[^/]*'}
-  else if(c==='?')r+='[^/]';else r+=c.replace(/[.+^$(){}|[\]\\]/g,'\\$&')}
-  return new RegExp('^'+r+'$')};
-const cut=(s,n)=>s.length>n?s.slice(0,n)+'\n…':s;
-function finish(path,before,after,dry,action){
-  const t=p.join('.pono','tmp');fs.mkdirSync(t,{recursive:true});
-  fs.writeFileSync(p.join(t,'a'),before);fs.writeFileSync(p.join(t,'b'),after);
-  const d=git(['diff','--no-index','--no-color','-U3',p.join(t,'a'),p.join(t,'b')]).stdout.split('\n').slice(4).join('\n');
-  if(!dry){fs.mkdirSync(p.dirname(path),{recursive:true});fs.writeFileSync(path,after)}
-  out({path,action:dry?'preview':action,diff:cut(d,L.diffChars)})}
-switch(I.op){
-case 'list':{let f=files();
-  if(I.path)f=f.filter(x=>x===I.path||x.startsWith(I.path+'/'));
-  if(I.pattern){const g=glob(I.pattern);f=f.filter(x=>g.test(x)||g.test(p.basename(x)))}
-  out({total:f.length,files:f.slice(0,L.files),truncated:f.length>L.files})}
-case 'read':{let b;try{b=fs.readFileSync(I.path)}catch{out({error:'not_found',path:I.path})}
-  if(b.includes(0))out({path:I.path,binary:true,size:b.length});
-  const all=b.toString('utf8').split('\n'),s=I.offset-1,part=all.slice(s,s+I.limit);
-  const content=part.map((l,k)=>String(s+k+1).padStart(6)+'\t'+(l.length>L.lineChars?l.slice(0,L.lineChars)+'…':l)).join('\n');
-  out({path:I.path,totalLines:all.length,from:s+1,to:s+part.length,content,truncated:s+part.length<all.length})}
-case 'search':{const a=['grep','-n','-I','--untracked','-E'];if(I.ignoreCase)a.push('-i');a.push('-e',I.pattern);if(I.path)a.push('--',I.path);
-  let m=git(a).stdout.split('\n').filter(Boolean);
-  if(I.glob){const g=glob(I.glob);m=m.filter(l=>{const f=l.split(':')[0];return g.test(f)||g.test(p.basename(f))})}
-  out({total:m.length,matches:m.slice(0,L.matches).map(l=>l.length>300?l.slice(0,300)+'…':l),truncated:m.length>L.matches})}
-case 'edit':{let text;try{text=fs.readFileSync(I.path,'utf8')}catch{out({error:'not_found',path:I.path})}
-  const before=text,crlf=text.includes('\r\n');
-  for(const e of I.edits){
-    const o=crlf&&!e.old.includes('\r')?e.old.replace(/\n/g,'\r\n'):e.old;
-    const n=crlf&&!e.new.includes('\r')?e.new.replace(/\n/g,'\r\n'):e.new;
-    const count=text.split(o).length-1;
-    if(count===0){const first=(e.old.split('\n').find(l=>l.trim())||'').trim().slice(0,40);
-      const near=first?text.split(/\r?\n/).map((l,k)=>[k+1,l]).filter(([,l])=>l.includes(first)).slice(0,3).map(([k,l])=>k+': '+l.slice(0,200)):[];
-      out({error:'edit_not_found',path:I.path,old:e.old.slice(0,300),near,hint:'Read the file again: old_text must match exactly, spaces included.'})}
-    if(count>1&&!e.all)out({error:'edit_ambiguous',path:I.path,old:e.old.slice(0,300),count,hint:'Give more surrounding lines, or set replace_all.'});
-    text=e.all?text.split(o).join(n):text.replace(o,()=>n)}
-  finish(I.path,before,text,I.dryRun,'edited')}
-case 'write':{const had=fs.existsSync(I.path);finish(I.path,had?fs.readFileSync(I.path,'utf8'):'',I.content,false,had?'replaced':'created')}
-case 'move':{if(!fs.existsSync(I.path))out({error:'not_found',path:I.path});if(fs.existsSync(I.to))out({error:'exists',path:I.to});
-  fs.mkdirSync(p.dirname(I.to),{recursive:true});fs.renameSync(I.path,I.to);out({moved:I.path,to:I.to})}
-case 'delete':{if(!fs.existsSync(I.path)||fs.statSync(I.path).isDirectory())out({error:'not_found',path:I.path});fs.rmSync(I.path);out({deleted:I.path})}
-case 'changes':{const st=git(['status','--porcelain']).stdout.split('\n').filter(Boolean);
-  const d=git(['diff','--no-color']).stdout;
-  out({files:st,diff:cut(d,L.diffChars),truncated:d.length>L.diffChars})}
-default:out({error:'unknown_op'})}
-`;
+export const TOOLBOX = readFileSync(new URL('./toolbox.cjs', import.meta.url), 'utf8');
 
 export type CodeOp =
   | { op: 'list'; path: string | null; pattern: string | null }
@@ -106,19 +56,51 @@ export type CodeOp =
       dryRun: boolean;
     }
   | { op: 'write'; path: string; content: string }
+  | { op: 'patch'; patch: string }
+  | { op: 'map'; path: string | null }
+  | { op: 'undo'; path: string }
+  | { op: 'skills'; skills: { name: string; text: string; files: Record<string, string> }[] }
   | { op: 'move'; path: string; to: string }
   | { op: 'delete'; path: string }
   | { op: 'changes' };
 
-/** The command that runs one file operation in the repository on the server. */
+/** Operations that change files: after them, the dev server's own reaction is read back. */
+export const WRITING_OPS = new Set(['edit', 'write', 'patch', 'move', 'delete', 'undo']);
+
+/**
+ * The command that runs one file operation in the repository on the server. After a change, it
+ * waits a moment and appends the dev server's last log lines: its compile errors are the agent's
+ * best feedback (SWE-agent's lesson: show the consequence of an edit right away).
+ */
 export function codeCommand(repository: string, input: CodeOp): string {
   const data = Buffer.from(JSON.stringify({ ...input, limits: LIMITS })).toString('base64');
-  return `cd "${workdir(repository)}" 2>/dev/null || { echo '{"error":"not_ready"}'; exit 0; }; PONO_IN=${q(data)} node -e ${q(SCRIPT)}`;
+  const after = WRITING_OPS.has(input.op)
+    ? ` ; if [ -f .pono/dev.pid ]; then sleep 1.5; echo '<<<devlog>>>'; tail -n 25 .pono/dev.log 2>/dev/null; fi`
+    : '';
+  return `cd "${workdir(repository)}" 2>/dev/null || { echo '{"error":"not_ready"}'; exit 0; }; PONO_IN=${q(data)} node -e ${q(TOOLBOX)}${after}`;
+}
+
+/** Lines of a dev server log that say something went wrong. */
+const PROBLEM = /error|failed|cannot|unexpected|not found|exception|✘|\[plugin/i;
+// eslint-disable-next-line no-control-regex
+const COLOR = /\u001b\[[0-9;]*m/g;
+
+/** The dev server's reaction to a change: its problem lines only, or nothing. */
+export function devProblems(stdout: string): string[] {
+  const at = stdout.indexOf('<<<devlog>>>');
+  if (at < 0) return [];
+  return stdout
+    .slice(at + 12)
+    .split('\n')
+    .map((l) => l.replace(COLOR, '').trimEnd())
+    .filter((l) => l && PROBLEM.test(l))
+    .slice(-10);
 }
 
 /** Reads the JSON line the script answered; a missing answer is the server's own failure. */
 export function readCode(stdout: string): Record<string, unknown> {
   const line = stdout
+    .split('<<<devlog>>>')[0]!
     .trim()
     .split('\n')
     .reverse()

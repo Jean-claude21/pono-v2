@@ -47,24 +47,59 @@ export function deploymentStatus(state: string): Deployment['status'] {
   return 'building';
 }
 
-/** Netlify sites as hosting. */
-export function netlifyHosting(fetchImpl: Fetch): Hosting & Connectable {
+/** Netlify sites as hosting; with Pono's OAuth application, a click instead of a key. */
+export function netlifyHosting(
+  fetchImpl: Fetch,
+  app?: { clientId: string; clientSecret: string },
+): Hosting & Connectable {
+  const account = async (token: string) => {
+    const user = await fetchJson<{
+      full_name?: string | null;
+      email?: string | null;
+      slug?: string | null;
+    }>(fetchImpl, {
+      provider: ID,
+      url: `${API}/user`,
+      headers: headers(token),
+    });
+    return { account: user.full_name || user.email || user.slug || 'Netlify', credential: token };
+  };
   return {
     id: ID,
     kind: 'hosting',
     fields: ['token'],
+    keyUrl: 'https://app.netlify.com/user/applications#personal-access-tokens',
+    keyScopes: 'A personal access token (no expiry, or the longest you accept)',
+    ...(app
+      ? {
+          oauth: {
+            authorizeUrl: (state: string, redirectUri: string) =>
+              `https://app.netlify.com/authorize?${new URLSearchParams({
+                client_id: app.clientId,
+                response_type: 'code',
+                redirect_uri: redirectUri,
+                state,
+              })}`,
+            async exchange(code: string, redirectUri: string) {
+              const answer = await fetchJson<{ access_token: string }>(fetchImpl, {
+                provider: ID,
+                url: 'https://api.netlify.com/oauth/token',
+                method: 'POST',
+                body: {
+                  grant_type: 'authorization_code',
+                  code,
+                  client_id: app.clientId,
+                  client_secret: app.clientSecret,
+                  redirect_uri: redirectUri,
+                },
+              });
+              return account(answer.access_token);
+            },
+          },
+        }
+      : {}),
     async verify(fields) {
-      const token = fields.token!;
-      const user = await fetchJson<{
-        full_name?: string | null;
-        email?: string | null;
-        slug?: string | null;
-      }>(fetchImpl, {
-        provider: ID,
-        url: `${API}/user`,
-        headers: headers(token),
-      });
-      return { account: user.full_name || user.email || user.slug || 'Netlify', credential: token };
+      return account(fields.token!);
     },
     async findSite(token, repository) {
       const sites = await fetchJson<SiteAnswer[]>(fetchImpl, {

@@ -7,12 +7,15 @@ import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import {
-  codeCommand,
+  devProblems,
   jobCommand,
+  LIMITS,
   readCode,
   readRun,
   runCommand,
   safePath,
+  TOOLBOX,
+  type CodeOp,
 } from '../src/features/devloop/code.js';
 import { call, signIn, testApp, type TestApp } from './support/app.js';
 
@@ -46,32 +49,42 @@ describe('paths the agent gives (D-027)', () => {
   });
 });
 
-/** The real commands in a real git repository and shell (Linux, as on project servers). */
-describe.skipIf(process.platform === 'win32')('the hand that writes, in a real shell', () => {
-  const root = mkdtempSync(join(tmpdir(), 'pono-code-'));
-  const home = join(root, 'home');
-  const dir = join(home, 'work', 'probe');
-  const repository = 'jc/probe';
-  const sh = (command: string) =>
-    execFileSync('sh', ['-c', command], { env: { ...process.env, HOME: home }, encoding: 'utf8' });
-  const op = (input: Parameters<typeof codeCommand>[1]) =>
-    readCode(sh(codeCommand(repository, input)));
+/** The workbench script itself, in a real git repository (every platform: it needs only node and git). */
+describe('the hand that writes, on a real repository (D-027)', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'pono-code-'));
+  const op = (input: CodeOp) =>
+    readCode(
+      execFileSync(process.execPath, ['-e', TOOLBOX], {
+        cwd: dir,
+        env: {
+          ...process.env,
+          PONO_IN: Buffer.from(JSON.stringify({ ...input, limits: LIMITS })).toString('base64'),
+        },
+        encoding: 'utf8',
+      }),
+    );
+  const read = (path: string) => readFileSync(join(dir, path), 'utf8');
+  const git = (...args: string[]) => execFileSync('git', args, { cwd: dir, encoding: 'utf8' });
 
   beforeAll(() => {
     mkdirSync(join(dir, 'src'), { recursive: true });
     writeFileSync(join(dir, 'src', 'app.ts'), 'const title = "Hello";\nexport { title };\n');
     writeFileSync(join(dir, 'src', 'page.tsx'), 'export const Page = () => <h1>Hi</h1>;\n');
+    writeFileSync(join(dir, 'src', 'menu.js'), 'export function menu() {\n    return [1, 2];\n}\n');
+    writeFileSync(join(dir, 'package.json'), '{ "name": "probe" }\n');
     writeFileSync(join(dir, 'README.md'), 'one\ntwo\nthree\nfour\nfive\n');
     writeFileSync(join(dir, 'crlf.txt'), 'alpha\r\nbeta\r\n');
     writeFileSync(join(dir, '.gitignore'), 'node_modules/\n');
     mkdirSync(join(dir, 'node_modules', 'x'), { recursive: true });
     writeFileSync(join(dir, 'node_modules', 'x', 'index.js'), 'ignored');
-    sh(
-      `cd "${dir}" && git init -q -b dev && mkdir -p .pono && echo '.pono/' >> .git/info/exclude && git add -A && git -c user.name=t -c user.email=t@t commit -qm seed`,
-    );
+    git('init', '-q', '-b', 'dev');
+    mkdirSync(join(dir, '.pono'), { recursive: true });
+    writeFileSync(join(dir, '.git', 'info', 'exclude'), '.pono/\n');
+    git('add', '-A');
+    git('-c', 'user.name=t', '-c', 'user.email=t@t', 'commit', '-qm', 'seed');
   });
 
-  it('lists files without ignored ones, narrowed by folder and glob', () => {
+  it('lists files without ignored ones, and maps the repository', () => {
     const all = op({ op: 'list', path: null, pattern: null });
     expect(all.files).toEqual(
       expect.arrayContaining(['src/app.ts', 'src/page.tsx', 'README.md', 'crlf.txt']),
@@ -79,6 +92,9 @@ describe.skipIf(process.platform === 'win32')('the hand that writes, in a real s
     expect(JSON.stringify(all.files)).not.toContain('node_modules');
     expect(op({ op: 'list', path: 'src', pattern: '*.tsx' }).files).toEqual(['src/page.tsx']);
     expect(op({ op: 'list', path: null, pattern: 'src/**/*.ts' }).files).toEqual(['src/app.ts']);
+    const map = op({ op: 'map', path: 'src' });
+    expect(map.map).toContain('src/menu.js (4): menu');
+    expect(map.map).toContain('src/page.tsx (2): Page');
   });
 
   it('reads by ranges, lines numbered', () => {
@@ -87,6 +103,9 @@ describe.skipIf(process.platform === 'win32')('the hand that writes, in a real s
     expect(part.content).toBe('     2\ttwo\n     3\tthree');
     expect(op({ op: 'read', path: 'nope.txt', offset: 1, limit: 10 })).toMatchObject({
       error: 'not_found',
+    });
+    expect(op({ op: 'read', path: '../outside', offset: 1, limit: 1 })).toMatchObject({
+      error: 'outside',
     });
   });
 
@@ -110,7 +129,7 @@ describe.skipIf(process.platform === 'win32')('the hand that writes, in a real s
     });
     expect(preview).toMatchObject({ action: 'preview' });
     expect(preview.diff).toContain('+const title = "Bonjour";');
-    expect(readFileSync(join(dir, 'src', 'app.ts'), 'utf8')).toContain('"Hello"');
+    expect(read('src/app.ts')).toContain('"Hello"');
 
     const missing = op({
       op: 'edit',
@@ -122,7 +141,7 @@ describe.skipIf(process.platform === 'win32')('the hand that writes, in a real s
       ],
     });
     expect(missing).toMatchObject({ error: 'edit_not_found' });
-    expect(readFileSync(join(dir, 'src', 'app.ts'), 'utf8')).toContain('"Hello"');
+    expect(read('src/app.ts')).toContain('"Hello"');
 
     expect(
       op({
@@ -133,16 +152,15 @@ describe.skipIf(process.platform === 'win32')('the hand that writes, in a real s
       }),
     ).toMatchObject({ error: 'edit_ambiguous', count: 2 });
 
-    const done = op({
-      op: 'edit',
-      path: 'src/app.ts',
-      dryRun: false,
-      edits: [{ old: 'title', new: 'heading', all: true }],
-    });
-    expect(done).toMatchObject({ action: 'edited' });
-    expect(readFileSync(join(dir, 'src', 'app.ts'), 'utf8')).toBe(
-      'const heading = "Hello";\nexport { heading };\n',
-    );
+    expect(
+      op({
+        op: 'edit',
+        path: 'src/app.ts',
+        dryRun: false,
+        edits: [{ old: 'title', new: 'heading', all: true }],
+      }),
+    ).toMatchObject({ action: 'edited' });
+    expect(read('src/app.ts')).toBe('const heading = "Hello";\nexport { heading };\n');
 
     op({
       op: 'edit',
@@ -150,31 +168,121 @@ describe.skipIf(process.platform === 'win32')('the hand that writes, in a real s
       dryRun: false,
       edits: [{ old: 'alpha\nbeta', new: 'a\nb', all: false }],
     });
-    expect(readFileSync(join(dir, 'crlf.txt'), 'utf8')).toBe('a\r\nb\r\n');
+    expect(read('crlf.txt')).toBe('a\r\nb\r\n');
+  });
+
+  it('finds a text whose edge spaces differ, and keeps the indentation', () => {
+    const done = op({
+      op: 'edit',
+      path: 'src/menu.js',
+      dryRun: false,
+      edits: [{ old: 'return [1, 2];', new: 'return [1, 2, 3];', all: false }],
+    });
+    expect(done).toMatchObject({ action: 'edited' });
+    const tolerant = op({
+      op: 'edit',
+      path: 'src/menu.js',
+      dryRun: false,
+      edits: [
+        {
+          old: 'export function menu() {\n  return [1, 2, 3];\n}',
+          new: 'export function menu() {\n  return [1, 2, 3, 4];\n}',
+          all: false,
+        },
+      ],
+    });
+    expect(tolerant).toMatchObject({ action: 'edited', matched: 'ignoring edge spaces' });
+    expect(read('src/menu.js')).toBe('export function menu() {\n  return [1, 2, 3, 4];\n}\n');
+  });
+
+  it('refuses an edit that breaks the syntax, and undoes the last changes', () => {
+    const broken = op({
+      op: 'edit',
+      path: 'src/menu.js',
+      dryRun: false,
+      edits: [{ old: 'return [1, 2, 3, 4];', new: 'return [1, 2, 3, 4;', all: false }],
+    });
+    expect(broken).toMatchObject({ error: 'syntax_broken', path: 'src/menu.js' });
+    expect(read('src/menu.js')).toContain('[1, 2, 3, 4]');
+    expect(op({ op: 'write', path: 'package.json', content: '{ "name": ' })).toMatchObject({
+      error: 'syntax_broken',
+    });
+
+    expect(op({ op: 'undo', path: 'src/menu.js' })).toMatchObject({ action: 'restored' });
+    expect(read('src/menu.js')).toContain('return [1, 2, 3];');
+    expect(op({ op: 'undo', path: 'src/menu.js' })).toMatchObject({ action: 'restored' });
+    expect(read('src/menu.js')).toContain('return [1, 2];');
+    expect(op({ op: 'undo', path: 'src/menu.js' })).toMatchObject({ error: 'nothing_to_undo' });
+  });
+
+  it("applies Codex's patch format to several files, all or nothing", () => {
+    const patch = [
+      '*** Begin Patch',
+      '*** Add File: src/contact.ts',
+      '+export const email = "hello@example.com";',
+      '*** Update File: src/app.ts',
+      '@@',
+      '-const heading = "Hello";',
+      '+const heading = "Bonjour";',
+      ' export { heading };',
+      '*** Delete File: README.md',
+      '*** End Patch',
+    ].join('\n');
+    const applied = op({ op: 'patch', patch });
+    expect(applied.applied).toEqual([
+      { path: 'src/contact.ts', action: 'created' },
+      { path: 'src/app.ts', action: 'updated' },
+      { path: 'README.md', action: 'deleted' },
+    ]);
+    expect(read('src/contact.ts')).toBe('export const email = "hello@example.com";\n');
+    expect(read('src/app.ts')).toContain('"Bonjour"');
+
+    const wrong = op({
+      op: 'patch',
+      patch: [
+        '*** Begin Patch',
+        '*** Add File: src/other.ts',
+        '+x',
+        '*** Update File: src/app.ts',
+        '-not in the file',
+        '+y',
+        '*** End Patch',
+      ].join('\n'),
+    });
+    expect(wrong).toMatchObject({ error: 'context_not_found' });
+    expect(op({ op: 'read', path: 'src/other.ts', offset: 1, limit: 1 })).toMatchObject({
+      error: 'not_found',
+    });
+    expect(op({ op: 'patch', patch: 'hello' })).toMatchObject({ error: 'patch_invalid' });
   });
 
   it('writes, moves and deletes files, then shows the changes', () => {
     expect(
       op({ op: 'write', path: 'src/new/contact.ts', content: 'export const c = 1;\n' }),
-    ).toMatchObject({
-      action: 'created',
+    ).toMatchObject({ action: 'created' });
+    expect(read('src/new/contact.ts')).toBe('export const c = 1;\n');
+    expect(op({ op: 'move', path: 'src/page.tsx', to: 'src/pages/home.tsx' })).toMatchObject({
+      to: 'src/pages/home.tsx',
     });
-    expect(readFileSync(join(dir, 'src', 'new', 'contact.ts'), 'utf8')).toBe(
-      'export const c = 1;\n',
-    );
-    expect(op({ op: 'move', path: 'README.md', to: 'docs/README.md' })).toMatchObject({
-      to: 'docs/README.md',
-    });
-    expect(op({ op: 'move', path: 'src/page.tsx', to: 'src/app.ts' })).toMatchObject({
+    expect(op({ op: 'move', path: 'src/menu.js', to: 'src/app.ts' })).toMatchObject({
       error: 'exists',
     });
     expect(op({ op: 'delete', path: 'crlf.txt' })).toMatchObject({ deleted: 'crlf.txt' });
     const changes = op({ op: 'changes' });
     expect(JSON.stringify(changes.files)).toContain('src/new/');
-    expect(changes.diff).toContain('heading');
+    expect(changes.diff).toContain('Bonjour');
   });
+});
+
+/** Commands in a real shell (Linux, as on project servers). */
+describe.skipIf(process.platform === 'win32')('commands on the server, in a real shell', () => {
+  const home = mkdtempSync(join(tmpdir(), 'pono-run-'));
+  const repository = 'jc/probe';
+  const sh = (command: string) =>
+    execFileSync('sh', ['-c', command], { env: { ...process.env, HOME: home }, encoding: 'utf8' });
 
   it('runs a command, bounded in time, and a background job read later', async () => {
+    mkdirSync(join(home, 'work', 'probe'), { recursive: true });
     const ok = readRun(sh(runCommand(repository, 'echo hi && exit 3', 10, false)));
     expect(ok).toMatchObject({ done: true, exitCode: 3, output: 'hi' });
     expect(readRun(sh(runCommand(repository, 'sleep 5', 1, false)))).toMatchObject({
@@ -189,6 +297,18 @@ describe.skipIf(process.platform === 'win32')('the hand that writes, in a real s
     }
     expect(job).toMatchObject({ done: true, exitCode: 0, output: 'later' });
   }, 20_000);
+
+  it('reads the dev server problems after a change', () => {
+    expect(
+      devProblems(
+        '{"action":"edited"}\n<<<devlog>>>\nready in 200ms\n[vite] Internal server error: x\n',
+      ),
+    ).toEqual(['[vite] Internal server error: x']);
+    expect(devProblems('{"action":"edited"}')).toEqual([]);
+    expect(readCode('{"action":"edited"}\n<<<devlog>>>\n{"level":"info"}')).toEqual({
+      action: 'edited',
+    });
+  });
 });
 
 let t: TestApp;

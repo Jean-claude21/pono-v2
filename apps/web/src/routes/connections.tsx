@@ -1,7 +1,7 @@
 import { createFileRoute } from '@tanstack/react-router';
-import { useState, type FormEvent } from 'react';
+import { useEffect, useState, type FormEvent } from 'react';
 import { Shell } from '@/features/shell/Shell';
-import { PageHead, StateDot } from '@/features/shell/ui';
+import { Icon, PageHead, StateDot } from '@/features/shell/ui';
 import { api, useApi, type ConnectionView } from '@/lib/api';
 import { ago, label } from '@/lib/labels';
 import { nameOf } from '@/lib/providers';
@@ -19,6 +19,11 @@ interface Available {
   provider: string;
   kind: string;
   fields: string[];
+  optionalFields: string[];
+  keyUrl: string | null;
+  keyScopes: string | null;
+  /** Where to sign in at the provider instead of giving a key (D-029). */
+  signIn: string | null;
 }
 
 type Need = 'required' | 'recommended' | 'optional';
@@ -44,44 +49,110 @@ const ROLES: Record<string, () => string> = {
   posthog: m.provider_posthog,
 };
 
+/** What the page was opened for: `?connect=` a provider or a kind, or the end of a sign-in. */
+function useQuery() {
+  const [q, setQ] = useState<Record<string, string>>({});
+  useEffect(() => {
+    setQ(Object.fromEntries(new URLSearchParams(window.location.search)));
+  }, []);
+  return q;
+}
+
 /**
- * The person's own accounts that Pono works with (D-022): grouped by what they are for, in the
- * order they are needed, each saying what Pono does with it.
+ * The person's own accounts that Pono works with (D-022, D-029): first the path of a project from
+ * code to online, then each service by what it is for, signed in with a click where the provider
+ * allows it, otherwise with a key created on the provider's own page, opened from here.
  */
 function Connections() {
   const data = useApi<{ connections: ConnectionView[]; available: Available[] }>('/v1/connections');
+  const query = useQuery();
   if (!data.result) return <p className="mute">{m.loading()}</p>;
   if (!data.result.ok) return <p className="notice">{label('error', data.result.error.code)}</p>;
   const { connections, available } = data.result.data;
   const has = (kind: string) => connections.some((c) => c.kind === kind);
 
+  const outcome = query.connected
+    ? { tone: 'healthy', text: m.connections_connected_now({ name: nameOf(query.connected) }) }
+    : query.failed
+      ? { tone: 'warning', text: m.connections_failed_now({ name: nameOf(query.failed) }) }
+      : query.cancelled
+        ? { tone: 'warning', text: m.connections_cancelled_now({ name: nameOf(query.cancelled) }) }
+        : null;
+
+  const stages: { title: string; done: boolean; state: string; tone: string }[] = [
+    {
+      title: m.connections_stage_code(),
+      done: has('code_host'),
+      state: has('code_host') ? m.connections_state_done() : m.connections_state_todo(),
+      tone: has('code_host') ? 'healthy' : 'failing',
+    },
+    {
+      title: m.connections_stage_dev(),
+      done: true,
+      state: m.connections_state_included(),
+      tone: 'healthy',
+    },
+    {
+      title: m.connections_stage_publish(),
+      done: has('hosting'),
+      state: has('hosting') ? m.connections_state_done() : m.connections_state_todo(),
+      tone: has('hosting') ? 'healthy' : 'warning',
+    },
+    {
+      title: m.connections_stage_data(),
+      done: has('database'),
+      state: has('database') ? m.connections_state_done() : m.connections_state_if_needed(),
+      tone: has('database') ? 'healthy' : 'idle',
+    },
+    {
+      title: m.connections_stage_extras(),
+      done: has('analytics') || has('ai'),
+      state:
+        has('analytics') || has('ai') ? m.connections_state_done() : m.connections_state_optional(),
+      tone: has('analytics') || has('ai') ? 'healthy' : 'idle',
+    },
+  ];
+
   return (
     <>
       <PageHead title={m.connections_title()} intro={m.connections_intro()} />
 
-      {has('code_host') ? (
-        <div className="verdict healthy">
+      {outcome && (
+        <div className={`verdict ${outcome.tone}`}>
           <div>
-            <span className="mono-label">{m.connections_ok_label()}</span>
-            <h3>{m.connections_ok({ count: String(connections.length) })}</h3>
-            {!has('hosting') && <p>{m.connections_hint_hosting()}</p>}
-          </div>
-        </div>
-      ) : (
-        <div className="verdict">
-          <div>
-            <span className="mono-label">{m.connections_start_label()}</span>
-            <h3>{m.connections_start()}</h3>
+            <h3>{outcome.text}</h3>
           </div>
         </div>
       )}
+
+      <section className="card path-card">
+        <header className="card-head">
+          <h2>{m.connections_path_title()}</h2>
+        </header>
+        <ol className="path">
+          {stages.map((s) => (
+            <li key={s.title} className={s.done ? 'done' : undefined}>
+              <span className="path-mark">{s.done ? <Icon name="check" /> : null}</span>
+              <strong>{s.title}</strong>
+              <StateDot state={s.tone} text={s.state} />
+            </li>
+          ))}
+        </ol>
+        <p className="small soft">
+          {!has('code_host')
+            ? m.connections_start()
+            : has('hosting')
+              ? m.connections_ready_all()
+              : m.connections_ready_code()}
+        </p>
+      </section>
 
       {KINDS.map(({ kind, need, why }) => {
         const providers = available.filter((a) => a.kind === kind);
         if (providers.length === 0) return null;
         const done = has(kind);
         return (
-          <section className="block" key={kind}>
+          <section className="block" key={kind} id={`kind-${kind}`}>
             <div className="block-head">
               <h2>{label('kind', kind)}</h2>
               <span className={`need ${done ? 'done' : need === 'required' ? 'required' : ''}`}>
@@ -95,6 +166,7 @@ function Connections() {
                   key={a.provider}
                   available={a}
                   connection={connections.find((c) => c.provider === a.provider)}
+                  asked={query.connect === a.provider}
                   onChange={data.reload}
                 />
               ))}
@@ -109,21 +181,35 @@ function Connections() {
 function Provider({
   available,
   connection,
+  asked,
   onChange,
 }: Readonly<{
   available: Available;
   connection: ConnectionView | undefined;
+  asked: boolean;
   onChange: () => void;
 }>) {
   const [open, setOpen] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const name = nameOf(available.provider);
+  const id = `provider-${available.provider}`;
+
+  // Opened from an agent's link: this provider's form, in view.
+  useEffect(() => {
+    if (!asked || connection) return;
+    if (!available.signIn) setOpen(true);
+    document.getElementById(id)?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  }, [asked, connection, available.signIn, id]);
 
   const submit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     const form = new FormData(event.currentTarget);
-    const fields = Object.fromEntries(available.fields.map((f) => [f, String(form.get(f) ?? '')]));
+    const fields = Object.fromEntries(
+      available.fields
+        .map((f) => [f, String(form.get(f) ?? '').trim()] as const)
+        .filter(([, v]) => v !== ''),
+    );
     setBusy(true);
     setError(null);
     const result = await api('/v1/connections', {
@@ -143,7 +229,7 @@ function Provider({
   };
 
   return (
-    <section className="card">
+    <section className={`card${asked && !connection ? ' asked' : ''}`} id={id}>
       <header className="card-head" style={{ marginBottom: 10 }}>
         <span className="provider-logo">{name.slice(0, 2).toUpperCase()}</span>
         <div style={{ flex: 1, minWidth: 0 }}>
@@ -168,19 +254,39 @@ function Provider({
         )}
         {open && (
           <form className="form" onSubmit={submit}>
+            {available.keyUrl && (
+              <div className="key-step">
+                <span className="small">{m.connections_step_open({ name })}</span>
+                <a
+                  className="btn btn-ghost btn-sm"
+                  href={available.keyUrl}
+                  target="_blank"
+                  rel="noreferrer"
+                >
+                  <Icon name="external" />
+                  {m.connections_open_key({ name })}
+                </a>
+                {available.keyScopes && <small className="mute">{available.keyScopes}</small>}
+              </div>
+            )}
+            <span className="small">{m.connections_step_paste()}</span>
             {available.fields.map((field) => (
               <div className="field" key={field}>
-                <label htmlFor={`${available.provider}-${field}`}>{label('field', field)}</label>
+                <label htmlFor={`${available.provider}-${field}`}>
+                  {label('field', field)}
+                  {available.optionalFields.includes(field) && (
+                    <span className="mute"> · {m.connections_optional()}</span>
+                  )}
+                </label>
                 <input
                   id={`${available.provider}-${field}`}
                   name={field}
                   type={['token', 'apiKey', 'password'].includes(field) ? 'password' : 'text'}
                   autoComplete="off"
-                  required
+                  required={!available.optionalFields.includes(field)}
                 />
               </div>
             ))}
-            <small className="mute">{m.connections_key_help({ name })}</small>
             {error && <p className="small bad">{error}</p>}
             <div className="row">
               <button type="submit" className="btn btn-primary btn-sm" disabled={busy}>
@@ -200,14 +306,42 @@ function Provider({
             : ''}
         </span>
         {connection ? (
-          <button type="button" className="btn btn-danger btn-xs" onClick={cut}>
-            {m.connections_cut()}
-          </button>
+          <div className="row" style={{ gap: 6 }}>
+            {available.kind === 'code_host' && available.signIn && (
+              <a className="btn btn-ghost btn-xs" href={available.signIn}>
+                {m.connections_reconnect()}
+              </a>
+            )}
+            <button type="button" className="btn btn-danger btn-xs" onClick={cut}>
+              {m.connections_cut()}
+            </button>
+          </div>
         ) : (
           !open && (
-            <button type="button" className="btn btn-primary btn-xs" onClick={() => setOpen(true)}>
-              {m.connections_connect()}
-            </button>
+            <div className="row" style={{ gap: 6, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
+              {available.signIn ? (
+                <>
+                  <button
+                    type="button"
+                    className="btn btn-ghost btn-xs"
+                    onClick={() => setOpen(true)}
+                  >
+                    {m.connections_with_key()}
+                  </button>
+                  <a className="btn btn-primary btn-xs" href={available.signIn}>
+                    {m.connections_sign_in({ name })}
+                  </a>
+                </>
+              ) : (
+                <button
+                  type="button"
+                  className="btn btn-primary btn-xs"
+                  onClick={() => setOpen(true)}
+                >
+                  {m.connections_connect()}
+                </button>
+              )}
+            </div>
           )
         )}
       </div>

@@ -107,17 +107,21 @@ function umami(
 
 /** Umami Cloud: an API key from the Umami Cloud settings. */
 export function umamiCloud(fetchImpl: Fetch): SiteAnalytics & Connectable {
-  return umami(
-    fetchImpl,
-    'umami',
-    ['apiKey'],
-    async (credential) => ({
-      api: CLOUD_API,
-      script: CLOUD_SCRIPT,
-      headers: { 'x-umami-api-key': credential },
-    }),
-    (fields) => fields.apiKey!,
-  );
+  return {
+    ...umami(
+      fetchImpl,
+      'umami',
+      ['apiKey'],
+      async (credential) => ({
+        api: CLOUD_API,
+        script: CLOUD_SCRIPT,
+        headers: { 'x-umami-api-key': credential },
+      }),
+      (fields) => fields.apiKey!,
+    ),
+    keyUrl: 'https://cloud.umami.is/settings/api-keys',
+    keyScopes: 'An API key',
+  };
 }
 
 interface SelfHosted {

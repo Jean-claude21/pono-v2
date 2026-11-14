@@ -109,7 +109,7 @@ try {
 
   const started = await tool('start_dev', {});
   const preview = started.previewUrl as string;
-  log('start_dev', { preview });
+  log('start_dev', { preview, skills: started.skills });
   for (let i = 0; i < 100; i++) {
     const s = await tool('dev_status', { lines: 5 });
     if (s.phase === 'running' && s.http > 0 && s.http < 500) break;
@@ -156,6 +156,41 @@ try {
   });
   log('edit_file refuses a missing text', {
     refused: JSON.stringify(wrong).includes('edit_not_found'),
+  });
+
+  const map = await tool('project_map', {});
+  log('project_map', String(map.map).split(String.fromCharCode(10)).slice(0, 6));
+
+  const broken = await mcp.callTool({
+    name: 'edit_file',
+    arguments: {
+      projectId,
+      path: 'vite.config.js',
+      edits: [{ old_text: 'export default', new_text: 'export default {' }],
+    },
+  });
+  log('edit_file refuses a broken syntax', {
+    refused: JSON.stringify(broken).includes('syntax_broken'),
+  });
+
+  const patched = await tool('apply_patch', {
+    patch: [
+      '*** Begin Patch',
+      '*** Add File: notes/patch.md',
+      '+Added by apply_patch from a chat.',
+      '*** Update File: index.html',
+      '@@',
+      '-<html><head><meta charset="utf-8"><title>Pono probe</title></head>',
+      '+<html><head><meta charset="utf-8"><title>Pono probe · patched</title></head>',
+      '*** End Patch',
+    ].join(String.fromCharCode(10)),
+  });
+  log('apply_patch', patched.applied);
+  const undone = await tool('undo_edit', { path: 'index.html' });
+  const title = await (await fetch(preview)).text();
+  log('undo_edit', {
+    action: undone.action,
+    titleBack: !title.includes('patched') && title.includes(stamp),
   });
 
   const note = await tool('write_file', {

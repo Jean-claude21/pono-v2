@@ -191,23 +191,37 @@ export function adminRoutes(deps: AdminDeps): Hono<AppEnv> {
       );
       if (!templateFile)
         throw new AppError('catalog.unreadable', 422, 'The repository has no pono-template.yaml.');
-      const names = (
-        await host.listDirectory(credential, repository.fullName, '.pono/skills', ref)
-      ).filter((n) => n.endsWith('.md'));
+      // Skills as the Agent Skills standard keeps them (D-028): a folder per skill with its
+      // SKILL.md and its references, scripts and assets; the first one-file format still reads.
       const skillFiles: string[] = [];
-      for (const n of names) {
-        const content = await host.fileAt(
-          credential,
-          repository.fullName,
-          `.pono/skills/${n}`,
-          ref,
-        );
-        if (content) skillFiles.push(content);
+      const extra = new Map<string, Record<string, string>>();
+      const at = (path: string) => host.fileAt(credential, repository.fullName, path, ref);
+      const list = (path: string) =>
+        host.listDirectory(credential, repository.fullName, path, ref).catch(() => []);
+      for (const root of ['.pono/skills', '.claude/skills', '.agents/skills']) {
+        for (const n of await list(root)) {
+          if (n.endsWith('.md')) {
+            const content = await at(`${root}/${n}`);
+            if (content) skillFiles.push(content);
+            continue;
+          }
+          const main = await at(`${root}/${n}/SKILL.md`);
+          if (!main) continue;
+          skillFiles.push(main);
+          const files: Record<string, string> = {};
+          for (const top of ['references', 'scripts', 'assets'])
+            for (const f of (await list(`${root}/${n}/${top}`)).slice(0, 20)) {
+              const content = await at(`${root}/${n}/${top}/${f}`);
+              if (content !== null && content.length <= 100_000) files[`${top}/${f}`] = content;
+            }
+          if (Object.keys(files).length) extra.set(n, files);
+        }
+        if (skillFiles.length) break;
       }
-      const { template, skills } = readTemplateRepository(
-        repository.fullName,
-        templateFile,
-        skillFiles,
+      const read = readTemplateRepository(repository.fullName, templateFile, skillFiles);
+      const template = read.template;
+      const skills = read.skills.map((s) =>
+        extra.has(s.name) ? { ...s, files: extra.get(s.name) } : s,
       );
       for (const skill of skills)
         await deps.pool.query('SELECT admin_catalog_publish($1, $2, $3)', [

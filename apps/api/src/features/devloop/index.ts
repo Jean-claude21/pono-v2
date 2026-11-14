@@ -25,7 +25,9 @@ import {
 } from './domain.js';
 import {
   codeCommand,
+  devProblems,
   jobCommand,
+  WRITING_OPS,
   LIMITS,
   readCode,
   readRun,
@@ -315,8 +317,6 @@ function pathOf(path: string): string {
   return clean;
 }
 
-const WRITES = new Set(['edit', 'write', 'move', 'delete']);
-
 /**
  * One file operation in the project's repository on its server (D-027): read, list, search, edit,
  * write, move, delete, or the changes so far. Writes are journaled with their paths; nothing that
@@ -331,12 +331,16 @@ export async function codeOn(
   const op: CodeOp =
     'path' in input && input.path !== null ? { ...input, path: pathOf(input.path) } : input;
   if (op.op === 'move') op.to = pathOf(op.to);
-  if (op.op === 'write' && op.content.length > LIMITS.writeChars)
+  if (
+    (op.op === 'write' && op.content.length > LIMITS.writeChars) ||
+    (op.op === 'patch' && op.patch.length > LIMITS.writeChars)
+  )
     throw new AppError('code.too_large', 413, 'Write large files in several smaller parts.');
   const t = await target(deps, actor, projectId);
   const out = await deps.serverHost.run(t.externalId, codeCommand(t.repository, op), {
     timeoutMs: 60_000,
   });
+  const problems = redact(devProblems(out.stdout).join('\n'), t.values);
   const answer = readCode(out.stdout);
   if (answer.error === 'not_ready')
     throw new AppError(
@@ -348,12 +352,17 @@ export async function codeOn(
     throw new AppError('code.server_failed', 502, 'The server did not answer.', {
       output: redact(out.stderr, t.values).slice(-1500),
     });
-  if (!answer.error && WRITES.has(op.op) && !(op.op === 'edit' && op.dryRun))
+  const wrote = !answer.error && WRITING_OPS.has(op.op) && !(op.op === 'edit' && op.dryRun);
+  if (wrote)
     await journal(deps, actor, projectId, `code.${op.op}`, {
       path: 'path' in op ? op.path : null,
       ...(op.op === 'move' ? { to: op.to } : {}),
+      ...(op.op === 'patch' && Array.isArray(answer.applied)
+        ? { files: (answer.applied as { path: string }[]).map((a) => a.path).slice(0, 50) }
+        : {}),
     });
-  return JSON.parse(redact(JSON.stringify(answer), t.values)) as Record<string, unknown>;
+  const safe = JSON.parse(redact(JSON.stringify(answer), t.values)) as Record<string, unknown>;
+  return wrote && problems ? { ...safe, devServer: problems.split('\n') } : safe;
 }
 
 /**
