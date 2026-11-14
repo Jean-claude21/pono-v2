@@ -225,7 +225,10 @@ describe('the dev loop through Pono', () => {
     expect(res.status).toBe(200);
     const view = await res.json();
     expect(view).toMatchObject({ phase: 'running', http: 200, port: 4000 });
-    expect(view.previewUrl).toMatch(/-4000\.servers\.test$/);
+    // Private (D-031): the address opens through Pono; no port stays open to the internet.
+    expect(view.previewUrl).toBe(`http://console.test/v1/projects/${p.id}/preview`);
+    expect(view.private).toBe(true);
+    expect(t.world.unpublished.some((u) => u.endsWith(':4000'))).toBe(true);
     const sent = t.world.commands.filter((c) => c.command.includes(p.fullName.split('/')[1]!));
     expect(
       sent.some(
@@ -238,7 +241,20 @@ describe('the dev loop through Pono', () => {
     expect(start.command).toContain("__VITE_ADDITIONAL_SERVER_ALLOWED_HOSTS='.servers.test'");
     expect(start.command).not.toContain('AUTHORIZATION');
     const preview = await call(t, p.cookie, `/v1/projects/${p.id}/preview`);
-    expect(preview.headers.get('location')).toBe(view.previewUrl);
+    expect(preview.headers.get('location')).toMatch(/-4000\.servers\.test\/\?token=t43200$/);
+    const shared = await call(t, p.cookie, `/v1/projects/${p.id}/preview/share`, {
+      method: 'POST',
+      body: { hours: 24 },
+    });
+    expect(await shared.json()).toMatchObject({
+      shared: true,
+      url: expect.stringMatching(/token=t86400$/),
+    });
+    const tooLong = await call(t, p.cookie, `/v1/projects/${p.id}/preview/share`, {
+      method: 'POST',
+      body: { hours: 500 },
+    });
+    expect(tooLong.status).toBe(400);
   });
 
   it('refuses to push a secret, naming file and line, never the value', async () => {

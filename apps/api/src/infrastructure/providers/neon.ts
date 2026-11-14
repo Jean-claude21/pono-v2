@@ -25,6 +25,7 @@ export function neonDatabase(fetchImpl: Fetch): Database & Connectable {
     kind: 'database',
     fields: ['token'],
     keyUrl: 'https://console.neon.tech/app/settings/api-keys',
+    serverDomains: ['*.neon.tech'],
     keyScopes: 'A personal API key',
     async verify(fields) {
       const token = fields.token!;

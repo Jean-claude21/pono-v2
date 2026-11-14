@@ -61,13 +61,34 @@ const umami = umamiCloud(fetch);
 const umamiSelf = umamiSelfHosted(fetch);
 const posthog = posthogAnalytics(fetch);
 
+const connectable = [github, netlify, cloudflare, coolify, neon, openai, umami, umamiSelf, posthog];
+
+/**
+ * What a server with a limited network always reaches (D-031): the package registries, so that an
+ * install works; the code host and the connected services are added from their own adapters.
+ */
+const NETWORK_BASE = [
+  'registry.npmjs.org',
+  '*.npmjs.org',
+  'registry.yarnpkg.com',
+  'repo.yarnpkg.com',
+  'nodejs.org',
+  'pypi.org',
+  'files.pythonhosted.org',
+  ...(github.serverDomains ?? []),
+];
+
 const deps: AppDeps = {
   pool: createPool(config.PONO_DATABASE_URL),
   sealer: new Sealer(config.PONO_SECRETS_KEY),
   publicUrl: config.PONO_PUBLIC_URL,
   secureCookies: config.NODE_ENV === 'production',
   identity,
-  connectable: [github, netlify, cloudflare, coolify, neon, openai, umami, umamiSelf, posthog],
+  connectable,
+  networkBase: NETWORK_BASE,
+  serviceDomains: Object.fromEntries(
+    connectable.flatMap((p) => (p.serverDomains ? [[p.id, p.serverDomains]] : [])),
+  ),
   analytics: [umami, umamiSelf, posthog],
   usageSources: [
     githubUsage(fetch),

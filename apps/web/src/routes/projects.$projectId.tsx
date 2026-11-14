@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react';
 import { ProjectDev } from '@/features/projects/ProjectDev';
 import { ProjectManifest } from '@/features/projects/ProjectManifest';
 import { ProjectServer } from '@/features/projects/ProjectServer';
+import { ProjectBackups, ProjectNetwork } from '@/features/projects/ProjectSafety';
 import { ProjectVariables } from '@/features/projects/ProjectVariables';
 import { ProjectVisits } from '@/features/projects/ProjectVisits';
 import { Releases } from '@/features/releases/Releases';
@@ -175,7 +176,15 @@ function Project({ id, onName }: Readonly<{ id: string; onName: (name: string) =
           <ProjectVisits projectId={id} />
         </>
       )}
-      {tab === 'dev' && <ProjectDev projectId={id} />}
+      {tab === 'dev' && (
+        <>
+          <ProjectDev projectId={id} />
+          <div className="grid-cards two">
+            <ProjectBackups projectId={id} />
+            <ProjectNetwork projectId={id} />
+          </div>
+        </>
+      )}
       {tab === 'manifest' && <ProjectManifest projectId={id} />}
       {tab === 'variables' && <ProjectVariables projectId={id} />}
       {tab === 'releases' && (

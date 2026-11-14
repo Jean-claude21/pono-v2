@@ -19,6 +19,17 @@ export interface CreateServer {
   idleSeconds: number;
 }
 
+/** Where a server may connect: anywhere, nowhere, or only the listed domains and IPv4 ranges. */
+export type NetworkPolicy = 'open' | 'closed' | { allow: string[] };
+
+/** A restore point of a server's files. */
+export interface ServerBackup {
+  id: string;
+  kind: 'automatic' | 'manual';
+  createdAt: Date;
+  sizeBytes: number;
+}
+
 /** Where project servers run. The id is an opaque adapter id (D-003). */
 export interface ProjectServerHost {
   readonly id: string;
@@ -51,6 +62,25 @@ export interface ProjectServerHost {
     outOfMemory: boolean;
     verdict: string | null;
   }>;
+  /** A private, time-boxed address of a port for a browser (D-031); no address stays open after. */
+  previewLink?(
+    externalId: string,
+    port: number,
+    ttlSeconds: number,
+  ): Promise<{ url: string; expiresAt: Date }>;
+  /** Closes a port opened with publishPort; nothing when it was not open. */
+  unpublishPort?(externalId: string, port: number): Promise<void>;
+  /** Applies where the server may connect, without a restart (D-031). */
+  setNetwork?(externalId: string, policy: NetworkPolicy): Promise<void>;
+  /** Domains the host itself needs reachable from the server (its own API, its tools). */
+  readonly networkNeeds?: string[];
+  /** Restore points: nightly ones, and one taken on demand (D-031). */
+  backups?: {
+    list(externalId: string): Promise<ServerBackup[]>;
+    create(externalId: string): Promise<ServerBackup>;
+    /** Replaces the server's files with a backup, in place; files written after it are lost. */
+    restore(externalId: string, backupId: string): Promise<void>;
+  };
   /** The host suffix of published addresses, for dev servers that check their host (`.example.app`). */
   readonly publicHostSuffix: string | null;
 }

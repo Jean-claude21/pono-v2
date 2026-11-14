@@ -75,6 +75,7 @@ export function cloudflareHosting(fetchImpl: Fetch): Hosting & Connectable {
     fields: ['token', 'accountId'],
     optionalFields: ['accountId'],
     keyUrl: 'https://dash.cloudflare.com/profile/api-tokens',
+    serverDomains: ['api.cloudflare.com', '*.workers.dev', '*.pages.dev'],
     keyScopes: 'Template « Edit Cloudflare Workers », plus Cloudflare Pages: Edit',
     async verify(fields) {
       let accountId = fields.accountId;

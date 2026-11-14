@@ -16,7 +16,12 @@ import type {
 import type { ChangedFile } from '../../src/features/releases/guards.js';
 import type { Proposal } from '../../src/features/projects/ports.js';
 import type { SiteAnalytics } from '../../src/features/analytics/index.js';
-import type { HostedServer, ProjectServerHost } from '../../src/features/servers/index.js';
+import type {
+  HostedServer,
+  NetworkPolicy,
+  ProjectServerHost,
+  ServerBackup,
+} from '../../src/features/servers/index.js';
 import type { Reading, UsageSource } from '../../src/features/usage/index.js';
 import { createPool, type Pool } from '../../src/platform/db.js';
 import { ProviderError } from '../../src/platform/http.js';
@@ -91,6 +96,41 @@ export function fakeServerHost(w: World): ProjectServerHost {
     async publishPort(id, port) {
       return { url: `https://${id}-${port}.servers.test` };
     },
+    async previewLink(id, port, ttlSeconds) {
+      return {
+        url: `https://${id}-${port}.servers.test/?token=t${ttlSeconds}`,
+        expiresAt: new Date(Date.now() + ttlSeconds * 1000),
+      };
+    },
+    async unpublishPort(id, port) {
+      w.unpublished.push(`${id}:${port}`);
+    },
+    async setNetwork(id, policy) {
+      w.network.set(id, policy);
+    },
+    networkNeeds: ['api.servers.test'],
+    backups: {
+      async list(id) {
+        return w.backups.get(id) ?? [];
+      },
+      async create(id) {
+        const known = w.backups.get(id) ?? [];
+        const last = known.find((b) => b.kind === 'manual');
+        if (last && Date.now() - +last.createdAt < 15 * 60_000)
+          throw new ProviderError('servers', 429, 'Answered 429');
+        const made: ServerBackup = {
+          id: `bk${known.length + 1}x${id}`,
+          kind: 'manual',
+          createdAt: new Date(),
+          sizeBytes: 1000,
+        };
+        w.backups.set(id, [made, ...known.filter((b) => b.kind !== 'manual')]);
+        return made;
+      },
+      async restore(id, backupId) {
+        w.restored.push(`${id}:${backupId}`);
+      },
+    },
   };
 }
 
@@ -156,6 +196,11 @@ export interface World {
   links: Map<string, 'up' | 'down'>;
   /** Credentials the adapters were called with: never anything else than the sealed one, opened. */
   seen: string[];
+  /** Server safety (D-031): network policies applied, ports closed, restore points, restores. */
+  network: Map<string, NetworkPolicy>;
+  unpublished: string[];
+  backups: Map<string, ServerBackup[]>;
+  restored: string[];
 }
 
 export function world(): World {
@@ -179,6 +224,10 @@ export function world(): World {
     databases: new Map(),
     links: new Map(),
     seen: [],
+    network: new Map(),
+    unpublished: [],
+    backups: new Map(),
+    restored: [],
   };
 }
 
@@ -313,6 +362,8 @@ export function testApp(): TestApp {
     serverHost: fakeServerHost(w),
     serverBudgetMicros: 5_000_000,
     serverIdleSeconds: 1800,
+    networkBase: ['registry.npmjs.org'],
+    serviceDomains: { code: ['code.test'], db: ['*.db.test'] },
     catalog: loadCatalog(),
     billing: devBilling({
       secret: 'billing-test',
