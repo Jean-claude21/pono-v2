@@ -120,6 +120,7 @@ export function umamiCloud(fetchImpl: Fetch): SiteAnalytics & Connectable {
       (fields) => fields.apiKey!,
     ),
     keyUrl: 'https://cloud.umami.is/settings/api-keys',
+    serverDomains: ['*.umami.is', '*.umami.dev'],
     keyScopes: 'An API key',
   };
 }

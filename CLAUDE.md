@@ -17,11 +17,11 @@ prêt pour chaque projet lancé, et une production qui obéit à la règle chois
 
 ## Phase en cours
 
-Phases 0 à 17 codées et testées (`specs/001` à `019`, dont la console au nouveau design, D-022, la page
-publique, D-025, et le déploiement, D-024) ; prouvées en local contre les vrais
-fournisseurs, dont trois personnes et trois serveurs Agent37 réels. Restent les gestes de l'auteur
-listés dans `docs/ROADMAP.md` (application GitHub, domaine, Stripe, Umami, Resend, Coolify), puis le
-déploiement et les preuves en ligne.
+Phases 0 à 22 codées, testées et déployées sur `pono.kete.digital` (`specs/001` à `022`) : la
+console, la page publique (D-025), le code depuis n'importe quel chat (D-027, D-028), les services
+reliés par connexion (D-029) et les filets du serveur, preview privée, réseau limité, sauvegardes
+(D-031). Restent pour la suite : un gabarit de serveur Pono, la copie d'un serveur, et l'agent sur le
+serveur (décision économique d'abord).
 
 ## Lancer en local
 

@@ -15,8 +15,24 @@ import {
   type ServerStatus,
 } from './domain.js';
 import type { ProjectServerHost } from './ports.js';
+import {
+  applyNetwork,
+  backupServer,
+  listBackups,
+  networkInput,
+  networkView,
+  restoreServer,
+  setNetwork,
+} from './safety.js';
 
-export type { ProjectServerHost, HostedServer, CreateServer } from './ports.js';
+export type {
+  ProjectServerHost,
+  HostedServer,
+  CreateServer,
+  NetworkPolicy,
+  ServerBackup,
+} from './ports.js';
+export * from './safety.js';
 export {
   PLANS,
   activeLimit,
@@ -35,6 +51,10 @@ export interface ServersDeps {
   serverBudgetMicros: number;
   serverIdleSeconds: number;
   now: () => Date;
+  /** What every server with a limited network reaches: the package registries (D-031). */
+  networkBase?: string[];
+  /** What each connected service needs reachable, by provider id. */
+  serviceDomains?: Record<string, readonly string[]>;
 }
 
 export interface ServerView {
@@ -191,7 +211,7 @@ export async function allocateServer(
     budgetMicros: deps.serverBudgetMicros,
     idleSeconds: deps.serverIdleSeconds,
   });
-  return withOrganization(deps.pool, actor.organizationId, async (client) => {
+  const allocated = await withOrganization(deps.pool, actor.organizationId, async (client) => {
     const { rows: inserted } = await client.query<{ id: string }>(
       `INSERT INTO project_servers (organization_id, project_id, provider, external_id, agent, status, size, url, monthly_micros, budget_micros, created_by)
        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11) RETURNING id`,
@@ -219,6 +239,10 @@ export async function allocateServer(
     });
     return view((await rows(client, 's.id = $1', [inserted[0]!.id]))[0]!);
   });
+  // A project whose network is limited keeps it on its new server (D-031).
+  const network = await networkView(deps, actor, project.id);
+  if (network.mode === 'limited') await applyNetwork(deps, actor, project.id);
+  return allocated;
 }
 
 export async function sleepServer(deps: ServersDeps, actor: Actor, id: string): Promise<void> {
@@ -352,6 +376,42 @@ export function serverRoutes(deps: ServersDeps): Hono<AppEnv> {
         body.success ? body.data.sleepServerId : undefined,
       );
       return c.body(null, 204);
+    })
+    .get('/projects/:id/network', async (c) =>
+      c.json(await networkView(deps, c.var.actor, c.req.param('id'))),
+    )
+    .put('/projects/:id/network', async (c) => {
+      if (c.var.actor.channel !== 'console')
+        throw new AppError(
+          'network.console_only',
+          403,
+          'The person sets the network, in the console.',
+        );
+      const body = networkInput.safeParse(await c.req.json().catch(() => null));
+      if (!body.success)
+        throw new AppError('request.invalid', 400, 'Expected a mode and domains (example.com).');
+      return c.json(await setNetwork(deps, c.var.actor, c.req.param('id'), body.data));
+    })
+    .get('/servers/:id/backups', async (c) =>
+      c.json(await listBackups(deps, c.var.actor, c.req.param('id'))),
+    )
+    .post('/servers/:id/backups', async (c) =>
+      c.json(await backupServer(deps, c.var.actor, c.req.param('id')), 201),
+    )
+    .post('/servers/:id/restore', async (c) => {
+      if (c.var.actor.channel !== 'console')
+        throw new AppError('restore.console_only', 403, 'A restore is decided in the console.');
+      const body = z
+        .object({ backup: z.string().min(1).max(64) })
+        .safeParse(await c.req.json().catch(() => null));
+      if (!body.success) throw new AppError('request.invalid', 400, 'Expected a backup id.');
+      const id = c.req.param('id');
+      return c.json(
+        await restoreServer(deps, c.var.actor, id, body.data.backup, () =>
+          wakeServer(deps, c.var.actor, id),
+        ),
+        202,
+      );
     })
     .delete('/servers/:id', async (c) => {
       await releaseServer(deps, c.var.actor, c.req.param('id'));

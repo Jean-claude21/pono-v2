@@ -41,6 +41,9 @@ export interface AppDeps {
   serverHost: ProjectServerHost;
   serverBudgetMicros: number;
   serverIdleSeconds: number;
+  /** A limited server network (D-031): what every server reaches, and each service's domains. */
+  networkBase?: string[];
+  serviceDomains?: Record<string, readonly string[]>;
   catalog: Catalog;
   billing: BillingProvider;
   /** Where projects' visits are counted (D-017): Umami, PostHog. */
@@ -102,6 +105,14 @@ export function createApp(appDeps: AppDeps): Hono<AppEnv> {
 
   app.notFound((c) => c.json(errorBody('route.not_found', 'No such route.'), 404));
   app.onError((error, c) => {
+    // A link opened in a browser while signed out (a private preview, D-031): to the sign-in page.
+    if (
+      error instanceof AppError &&
+      error.status === 401 &&
+      c.req.method === 'GET' &&
+      (c.req.header('accept') ?? '').includes('text/html')
+    )
+      return c.redirect('/');
     if (error instanceof AppError)
       return c.json(errorBody(error.code, error.message, error.detail), error.status);
     console.error(error);

@@ -141,6 +141,8 @@ export interface RunResult {
   exitCode: number | null;
   timedOut: boolean;
   output: string;
+  /** Said when the server's limited network refused a connection (D-031). */
+  blocked?: string;
 }
 
 /** Reads what `runCommand` or `jobCommand` printed. */
