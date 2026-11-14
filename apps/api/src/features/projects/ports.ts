@@ -37,6 +37,19 @@ export interface CodeHost {
    * and an HTTP header to pass with `git -c http.extraHeader=…`. Never written into a git config.
    */
   gitAccess(credential: string, fullName: string): { url: string; header: string };
+  /**
+   * Lets a host read the repository (D-037): a read-only deploy key, and a push hook that starts its
+   * builds. Absent when the code host cannot; a missing permission throws a 403 ProviderError.
+   */
+  grantReadKey?(
+    credential: string,
+    fullName: string,
+    title: string,
+    publicKey: string,
+  ): Promise<void>;
+  addPushHook?(credential: string, fullName: string, url: string): Promise<void>;
+  /** The repository's address for git over SSH, as a host clones it with a deploy key. */
+  sshUrl?(fullName: string): string;
   /** Lets the repository serve as a starter that other repositories are generated from. */
   markAsTemplate(credential: string, fullName: string): Promise<void>;
   /** Open proposals (pull requests) towards the default branch (phase 5). */
@@ -110,6 +123,16 @@ export interface Hosting {
   deployments(credential: string, ref: string): Promise<Deployment[]>;
   /** Puts the previous production deployment back online (phase 5). */
   rollback(credential: string, ref: string): Promise<void>;
+  /**
+   * Creates the site that builds this repository (D-037), in three steps the application chains
+   * with the code host: a deploy key, the site linked to the repository, its first build.
+   */
+  newDeployKey?(credential: string): Promise<{ id: string; publicKey: string }>;
+  createSite?(
+    credential: string,
+    input: { name: string; gitUrl: string; branch: string; deployKeyId: string },
+  ): Promise<{ site: HostedSite; pushHookUrl: string | null }>;
+  startBuild?(credential: string, ref: string): Promise<void>;
 }
 
 export interface Database {

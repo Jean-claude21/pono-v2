@@ -7,6 +7,7 @@ import { readJournal } from '../journal/index.js';
 import {
   importProject,
   listRepositories,
+  putOnline,
   refreshProject,
   type ProjectsDeps,
 } from './application.js';
@@ -95,6 +96,12 @@ export function projectRoutes(deps: ProjectsDeps): Hono<AppEnv> {
           pushedAt: iso(r.pushedAt),
         })),
       });
+    })
+    .post('/projects/:id/online', async (c) => {
+      const id = c.req.param('id');
+      if (!z.uuid().safeParse(id).success)
+        throw new AppError('project.not_found', 404, 'No such project.');
+      return c.json(await putOnline(deps, c.var.actor, id));
     })
     .get('/projects', async (c) => {
       const { projects, latest } = await withOrganization(

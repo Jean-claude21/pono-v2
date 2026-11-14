@@ -430,3 +430,65 @@ revient tel qu'il était.
 **Restent pour la suite** : un gabarit de serveur Pono (outils déjà installés), la copie d'un
 serveur pour essayer sans risque, et l'agent qui tourne sur le serveur lui-même, qui attend la
 décision sur qui paie l'IA.
+
+## D-032 — Les jetons qui expirent se renouvellent seuls
+
+**Tranché le 2026-11-14.**
+
+Les jetons d'une application GitHub durent 8 heures. Pono scelle avec eux le jeton de
+renouvellement (6 mois) et les renouvelle avant leur fin, sous un verrou de ligne : le jeton de
+renouvellement change à chaque usage, deux renouvellements simultanés le perdraient. Un
+renouvellement refusé après la fin marque la connexion « expirée » : la personne se reconnecte.
+Une clé ordinaire, sans fin, reste comme avant.
+
+## D-033 — Le catalogue se range par catégories, les variantes héritent, la valeur se mesure
+
+**Tranché le 2026-11-14.**
+
+Six catégories : être visible, vendre, prendre rendez-vous, piloter, logiciel, libre. Une variante
+nomme son template : elle en hérite la stack, les skills, ce qu'il faut relier et le dépôt de
+départ, puis ajoute les siens. Chaque template dit ce qu'il demandera de relier. Sa valeur, c'est ce
+qu'il amène en production : projets lancés, projets en ligne, temps médian jusqu'à la première
+preview, comptés sur toutes les organisations sans rien livrer d'aucune.
+
+## D-034 — Un gabarit de serveur Pono
+
+**Tranché le 2026-11-14.**
+
+L'image `pono-web` (Agent37, `deploy/server-image`) part de l'image Claude Code d'Agent37 et ajoute
+pnpm, Spec Kit, un client Postgres, Chromium et Playwright (Node et Python). Les projets lancés sans
+autre agent démarrent dessus quand `PONO_SERVER_TEMPLATE=pono-web` ; sinon, l'image du fournisseur.
+
+## D-035 — Les skills des éditeurs, épinglées et relues
+
+**Tranché le 2026-11-14.**
+
+`frontend-design` et `webapp-testing` (Anthropic, Apache-2.0), `supabase-postgres-best-practices`
+(Supabase, MIT, valable pour tout Postgres) sont copiées telles quelles à un commit relu, avec leur
+licence (`scripts/vendor-skills.ts`). Écartées : celles de Vercel (sans licence déclarée, ou pensées
+pour Next.js). La skill `moneroo-payments` est de Pono, tirée de son intégration prouvée.
+
+## D-036 — Des dépôts de départ réels
+
+**Tranché le 2026-11-14.**
+
+Trois dépôts-modèles publics dans `kete-africa` : `pono-starter-site`, `pono-starter-shop` (Neon,
+Moneroo : prix recalculé par le serveur, webhook signé puis relu, paiement compté une fois) et
+`pono-starter-dashboard` (tableur publié en CSV). Chacun : TanStack Start, construction Netlify,
+textes dans un seul fichier, constitution et première spec Spec Kit, `pono.yaml` qui dit comment il
+tourne. Au lancement, Pono attend que GitHub ait fini de générer le dépôt avant d'écrire son
+manifeste, et y garde la section `dev` du modèle.
+
+## D-037 — Pono crée le site de production
+
+**Tranché le 2026-11-14.**
+
+« Mettre en ligne » (`put_online`) crée le site chez l'hébergeur relié (Netlify) : une clé de
+déploiement en lecture seule posée sur le dépôt, le site lié au dépôt, un webhook de poussée, une
+première construction. Ensuite, la production suit les fusions sur la branche principale, sous la
+règle du projet. **Ce que ça coûte** : l'application GitHub de Pono doit avoir les permissions
+« Administration » (clés de déploiement) et « Webhooks » ; sans elles, Pono le dit clairement.
+
+**Prouvé** (`apps/api/scripts/template-live.ts`, 2 minutes) : template « site » lancé, serveur
+`pono-web` prêt en 12 s, dev et preview privée, site Netlify créé, production qui répond, valeur du
+template comptée.

@@ -21,6 +21,11 @@ const schema = z.object({
   PONO_SERVER_BUDGET_USD: z.coerce.number().min(0).default(5),
   /** Idle minutes before a server sleeps. */
   /** Moneroo (D-023): one-off payments, preferred over Stripe when both are set. */
+  /** Pono's server template at Agent37 (D-034); the provider's own when absent. */
+  PONO_SERVER_TEMPLATE: z
+    .string()
+    .regex(/^[a-z0-9][a-z0-9-]{1,62}$/)
+    .optional(),
   MONEROO_SECRET_KEY: z.string().min(1).optional(),
   MONEROO_WEBHOOK_SECRET: z.string().min(1).optional(),
   PONO_MONEROO_CURRENCY: z.string().length(3).default('USD'),

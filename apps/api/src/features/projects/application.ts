@@ -1,6 +1,7 @@
 import type { Actor } from '../../platform/context.js';
 import { withOrganization, type Client, type Pool } from '../../platform/db.js';
 import { AppError } from '../../platform/errors.js';
+import { ProviderError } from '../../platform/http.js';
 import type { Sealer } from '../../platform/secrets.js';
 import { activeCredentials } from '../connections/index.js';
 import { record } from '../journal/index.js';
@@ -261,4 +262,106 @@ async function saveDeployments(
       ],
     );
   }
+}
+
+/**
+ * Puts a project online (D-037): the site that builds its repository is created at the connected
+ * hosting, which reads the repository with a read-only key and builds on every push to the
+ * default branch, starting now. Production still changes only by a proposal, under the project's
+ * release rule. A project that already has its site is left as it is.
+ */
+export async function putOnline(
+  deps: ProjectsDeps,
+  actor: Actor,
+  projectId: string,
+): Promise<{ created: boolean; provider: string; productionUrl: string | null }> {
+  const project = await withOrganization(deps.pool, actor.organizationId, async (client) => {
+    const { rows } = await client.query<{
+      repository: string;
+      default_branch: string;
+      hosting_provider: string | null;
+      hosting_ref: string | null;
+      production_url: string | null;
+    }>(
+      'SELECT repository, default_branch, hosting_provider, hosting_ref, production_url FROM projects WHERE id = $1',
+      [projectId],
+    );
+    return rows[0];
+  });
+  if (!project) throw new AppError('project.not_found', 404, 'No such project.');
+  if (project.hosting_provider && project.hosting_ref)
+    return {
+      created: false,
+      provider: project.hosting_provider,
+      productionUrl: project.production_url,
+    };
+
+  const creds = await credentials(deps, actor.organizationId);
+  const code = codeHostOf(deps, creds);
+  const hosting = connected(deps.adapters.hostings, creds).find(
+    (h) => h.adapter.newDeployKey && h.adapter.createSite,
+  );
+  if (!hosting)
+    throw new AppError(
+      'release.no_hosting',
+      409,
+      'Connect a hosting that Pono can create a site at (Netlify).',
+    );
+  if (!code.adapter.grantReadKey || !code.adapter.sshUrl)
+    throw new AppError('hosting.unsupported', 501, 'This code host cannot lend a deploy key.');
+
+  const h = hosting.adapter;
+  const key = await h.newDeployKey!(hosting.credential);
+  await code.adapter
+    .grantReadKey(code.credential, project.repository, 'Hosting (Pono)', key.publicKey)
+    .catch((error: unknown) => {
+      if (error instanceof ProviderError && (error.status === 403 || error.status === 404))
+        throw new AppError(
+          'code_host.permission_missing',
+          403,
+          'The code host refused to add a deploy key: Pono needs the Administration permission on this repository.',
+        );
+      throw error;
+    });
+  const base = project.repository
+    .split('/')[1]!
+    .toLowerCase()
+    .replace(/[^a-z0-9-]+/g, '-');
+  let created: Awaited<ReturnType<NonNullable<typeof h.createSite>>> | null = null;
+  for (let attempt = 0; attempt < 3 && !created; attempt++) {
+    const name = attempt === 0 ? base : `${base}-${Math.random().toString(36).slice(2, 7)}`;
+    created = await h.createSite!(hosting.credential, {
+      name: name.slice(0, 60),
+      gitUrl: code.adapter.sshUrl(project.repository),
+      branch: project.default_branch,
+      deployKeyId: key.id,
+    }).catch((error: unknown) => {
+      // A name taken by someone else at the host: another one, then.
+      if (error instanceof ProviderError && error.status === 422) return null;
+      throw error;
+    });
+  }
+  if (!created) throw new AppError('hosting.name_taken', 409, 'No free site name was found.');
+  if (created.pushHookUrl && code.adapter.addPushHook)
+    await code.adapter
+      .addPushHook(code.credential, project.repository, created.pushHookUrl)
+      .catch(() => undefined);
+  await h.startBuild?.(hosting.credential, created.site.ref).catch(() => undefined);
+
+  await withOrganization(deps.pool, actor.organizationId, async (client) => {
+    await client.query(
+      `UPDATE projects SET hosting_provider = $2, hosting_ref = $3, hosting_status = 'found',
+         production_url = $4 WHERE id = $1`,
+      [projectId, h.id, created.site.ref, created.site.productionUrl],
+    );
+    await record(client, {
+      organizationId: actor.organizationId,
+      projectId,
+      action: 'project.site_created',
+      actorPerson: actor.personId,
+      channel: actor.channel,
+      detail: { provider: h.id, url: created.site.productionUrl },
+    });
+  });
+  return { created: true, provider: h.id, productionUrl: created.site.productionUrl };
 }

@@ -17,11 +17,10 @@ prêt pour chaque projet lancé, et une production qui obéit à la règle chois
 
 ## Phase en cours
 
-Phases 0 à 22 codées, testées et déployées sur `pono.kete.digital` (`specs/001` à `022`) : la
-console, la page publique (D-025), le code depuis n'importe quel chat (D-027, D-028), les services
-reliés par connexion (D-029) et les filets du serveur, preview privée, réseau limité, sauvegardes
-(D-031). Restent pour la suite : un gabarit de serveur Pono, la copie d'un serveur, et l'agent sur le
-serveur (décision économique d'abord).
+**v1.** Phases 0 à 22 codées, testées et déployées sur `pono.kete.digital` (`specs/001` à `023`).
+Un template mène un projet en production par Pono seul (D-036, D-037). Restent les gestes de
+l'auteur listés dans `docs/ROADMAP.md`, puis, après la v1 : l'agent sur le serveur, la copie d'un
+serveur, la galerie des créateurs.
 
 ## Lancer en local
 

@@ -5,9 +5,10 @@ import { withOrganization } from '../../platform/db.js';
 import { AppError } from '../../platform/errors.js';
 import { ProviderError } from '../../platform/http.js';
 import { siteForLaunch, type SiteAnalytics } from '../analytics/index.js';
-import { catalogFor, type Catalog } from '../catalog/index.js';
+import { catalogFor, resolveTemplate, type Catalog } from '../catalog/index.js';
 import { activeCredentials } from '../connections/index.js';
 import { record } from '../journal/index.js';
+import { readManifest } from '../manifest/domain.js';
 import { writeManifest } from '../manifest/domain.js';
 import { importProject, type ProjectsDeps } from '../projects/application.js';
 import {
@@ -49,6 +50,8 @@ export function manifest(input: {
   skills: string[];
   agent: Agent;
   analytics?: { provider: 'umami' | 'posthog'; website: string };
+  /** How the starter runs on its server, kept from its own pono.yaml (D-036). */
+  dev?: { install?: string | undefined; command: string; port: number } | undefined;
 }): string {
   return writeManifest({
     version: 1,
@@ -62,6 +65,7 @@ export function manifest(input: {
     skills: { use: input.skills, local: '.pono/skills/' },
     release: { declared_destructions: [] },
     ...(input.analytics ? { analytics: input.analytics } : {}),
+    ...(input.dev ? { dev: input.dev } : {}),
   });
 }
 
@@ -77,7 +81,7 @@ export async function launchProject(
 ): Promise<Launched> {
   const started = Date.now();
   const catalog = await catalogFor(deps.pool, deps.catalog, actor.organizationId);
-  const template = catalog.templates.find((t) => t.id === input.template);
+  const template = resolveTemplate(catalog.templates, input.template);
   if (!template) throw new AppError('template.not_found', 404, 'No such template.');
 
   await withOrganization(deps.pool, actor.organizationId, async (client) => {
@@ -114,6 +118,15 @@ export async function launchProject(
     input.name,
   ).catch(() => null);
 
+  // The starter's own pono.yaml says how it runs on its server: Pono's manifest keeps that part.
+  const starterManifest = template.starter
+    ? await host
+        .fileAt(credential, template.starter, 'pono.yaml', 'HEAD')
+        .then((text) => (text ? readManifest(text) : null))
+        .catch(() => null)
+    : null;
+  const starterDev = starterManifest?.ok ? starterManifest.manifest.dev : undefined;
+
   let repository;
   try {
     repository = await host.createRepository(credential, {
@@ -127,6 +140,7 @@ export async function launchProject(
           template: template.id,
           skills: template.skills,
           agent: input.agent,
+          dev: starterDev,
           ...(site ? { analytics: { provider: site.provider, website: site.site } } : {}),
         }),
       },

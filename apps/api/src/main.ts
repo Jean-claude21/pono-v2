@@ -8,6 +8,8 @@ import { serve } from '@hono/node-server';
 import { createApp, type AppDeps } from './app.js';
 import { loadCatalog } from './features/catalog/index.js';
 import { devIdentity, githubIdentity, type IdentityProvider } from './features/identity/index.js';
+import { githubRefresher } from './features/identity/infrastructure/github.js';
+import { setRefresher } from './features/connections/index.js';
 import { agent37Account, agent37Host, agent37TopUp } from './infrastructure/providers/agent37.js';
 import {
   devBilling,
@@ -45,6 +47,17 @@ if (config.PONO_GITHUB_CLIENT_ID && config.PONO_GITHUB_CLIENT_SECRET) {
   );
 }
 if (config.PONO_DEV_SIGN_IN === '1') identity.push(devIdentity());
+// A GitHub App's user tokens last 8 hours: renewed with their refresh token (D-032).
+setRefresher(
+  'github',
+  config.PONO_GITHUB_CLIENT_ID && config.PONO_GITHUB_CLIENT_SECRET
+    ? githubRefresher({
+        clientId: config.PONO_GITHUB_CLIENT_ID,
+        clientSecret: config.PONO_GITHUB_CLIENT_SECRET,
+        fetch,
+      })
+    : null,
+);
 
 const github = githubCodeHost(fetch);
 const netlify = netlifyHosting(
@@ -104,7 +117,11 @@ const deps: AppDeps = {
     links: httpLinkChecker(fetch),
   },
   serverHost: config.AGENT37_API_KEY
-    ? agent37Host({ apiKey: config.AGENT37_API_KEY, fetch })
+    ? agent37Host({
+        apiKey: config.AGENT37_API_KEY,
+        fetch,
+        ...(config.PONO_SERVER_TEMPLATE ? { ponoTemplate: config.PONO_SERVER_TEMPLATE } : {}),
+      })
     : unavailableServerHost(),
   serverBudgetMicros: Math.round(config.PONO_SERVER_BUDGET_USD * 1_000_000),
   serverIdleSeconds: config.PONO_SERVER_IDLE_MINUTES * 60,
