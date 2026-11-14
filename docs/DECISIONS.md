@@ -392,3 +392,13 @@ relier. L'agent l'explique avec des mots simples et reprend une fois le service 
 
 **Ce que ça coûte.** Une connexion par clic demande une application de Pono chez chaque fournisseur,
 créée par l'exploitant ; sans elle, la clé guidée reste.
+
+## D-030 — Pono profite de ce que son hébergeur de serveurs offre déjà
+
+**Tranché le 2026-11-14.**
+
+Lu dans la documentation d'Agent37 : la preview porte le nom du projet (`<projet>-<id>`) ; l'état
+du dev dit si le serveur a manqué de mémoire ou redémarré ; l'exploitant recharge le portefeuille
+depuis l'admin (une page de paiement du fournisseur). Repérés pour la suite : sauvegarde et
+restauration d'un serveur, copie d'un serveur, previews privées signées, gabarits de serveur avec
+les outils déjà installés, et les agents qui tournent sur le serveur lui-même.

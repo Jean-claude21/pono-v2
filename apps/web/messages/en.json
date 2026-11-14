@@ -773,5 +773,7 @@
   "connections_reconnect": "Reconnect",
   "connections_connected_now": "{name} is connected.",
   "connections_failed_now": "Connecting {name} did not work. Try again, or use a key.",
-  "connections_cancelled_now": "Connecting {name} was cancelled."
+  "connections_cancelled_now": "Connecting {name} was cancelled.",
+  "admin_top_up": "Top up",
+  "admin_top_up_hint": "The payment opens at the server provider."
 }

@@ -46,6 +46,9 @@ interface Server {
   statusAt: string;
 }
 
+/** Top-ups offered from the wallet card, in USD. */
+const TOP_UPS = [10, 25, 50] as const;
+
 /** Under this balance the Agent37 wallet is said to be nearly empty. */
 const LOW_WALLET_MICROS = 5_000_000;
 
@@ -111,6 +114,14 @@ function Admin() {
       ? (account.balanceMicros / o.monthlyServerCostMicros).toFixed(1)
       : '—';
 
+  const topUp = async (amountUsd: number) => {
+    const r = await api<{ url: string }>('/v1/admin/wallet/top-up', {
+      method: 'POST',
+      body: { amountUsd },
+    });
+    if (r.ok) window.open(r.data.url, '_blank', 'noopener');
+  };
+
   const sleep = async (id: string) => {
     await api(`/v1/admin/servers/${id}/sleep`, { method: 'POST' });
     servers.reload();
@@ -170,7 +181,27 @@ function Admin() {
             />
           )}
         </Card>
-        <Card title={m.admin_wallet()} icon="gauge" foot={m.admin_wallet_foot()}>
+        <Card
+          title={m.admin_wallet()}
+          icon="gauge"
+          foot={m.admin_wallet_foot()}
+          tools={
+            account ? (
+              <div className="row" style={{ gap: 4 }} title={m.admin_top_up_hint()}>
+                {TOP_UPS.map((usd) => (
+                  <button
+                    key={usd}
+                    type="button"
+                    className="btn btn-ghost btn-xs"
+                    onClick={() => topUp(usd)}
+                  >
+                    {m.admin_top_up()} {money(usd * 1_000_000)}
+                  </button>
+                ))}
+              </div>
+            ) : undefined
+          }
+        >
           <Stats
             items={[
               {

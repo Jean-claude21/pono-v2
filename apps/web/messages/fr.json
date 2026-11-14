@@ -773,5 +773,7 @@
   "connections_reconnect": "Reconnecter",
   "connections_connected_now": "{name} est relié.",
   "connections_failed_now": "La connexion à {name} n'a pas abouti. Réessaie, ou passe par une clé.",
-  "connections_cancelled_now": "Connexion à {name} annulée."
+  "connections_cancelled_now": "Connexion à {name} annulée.",
+  "admin_top_up": "Recharger",
+  "admin_top_up_hint": "Le paiement s'ouvre chez le fournisseur des serveurs."
 }
