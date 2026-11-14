@@ -7,7 +7,7 @@ import { activeCredentials } from '../connections/index.js';
 import { record } from '../journal/index.js';
 import { readManifest } from '../manifest/domain.js';
 import type { ProjectsDeps } from '../projects/application.js';
-import type { ServersDeps } from '../servers/index.js';
+import { blockedByNetwork, type ServersDeps } from '../servers/index.js';
 import { checkSecrets } from '../variables/index.js';
 import {
   devPlan,
@@ -40,7 +40,21 @@ import {
 export * from './domain.js';
 export * from './code.js';
 
-export type DevLoopDeps = ProjectsDeps & ServersDeps;
+export type DevLoopDeps = ProjectsDeps &
+  ServersDeps & {
+    /** The console's address: private previews open through it (D-031). */
+    publicUrl?: string;
+  };
+
+/** Private previews (D-031): the host mints time-boxed links, nothing stays open to the internet. */
+const privatePreviews = (deps: DevLoopDeps) => Boolean(deps.serverHost.previewLink);
+
+/** The stable address a person opens: Pono checks who they are, then hands a fresh private link. */
+const previewEntry = (deps: DevLoopDeps, projectId: string) =>
+  `${deps.publicUrl ?? ''}/v1/projects/${projectId}/preview`;
+
+/** How long the person's own link lasts: a working session. */
+const OWN_PREVIEW_SECONDS = 12 * 3600;
 
 interface Target {
   projectId: string;
@@ -131,6 +145,8 @@ async function journal(
 
 export interface DevView extends DevState {
   previewUrl: string | null;
+  /** true when the preview opens only through Pono, or by a link shared for a while (D-031). */
+  private?: boolean;
   port: number | null;
   /** The server's own health, when its host says it: a dev server killed by memory shows here. */
   server?: { restarts: number; outOfMemory: boolean; verdict: string | null } | undefined;
@@ -188,20 +204,24 @@ export async function startDev(
     t.externalId,
     startCommand({ repository: t.repository, plan, hostSuffix: deps.serverHost.publicHostSuffix }),
   );
-  const prefix = t.repository
-    .split('/')
-    .pop()!
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, '-')
-    .replace(/^-+|-+$/g, '')
-    .slice(0, 30)
-    .replace(/-+$/, '');
-  const { url } = await deps.serverHost.publishPort(
-    t.externalId,
-    plan.port,
-    'preview',
-    prefix || undefined,
-  );
+  let url: string | null;
+  if (privatePreviews(deps)) {
+    // No public address: an earlier one is closed, the preview opens through Pono (D-031).
+    await deps.serverHost.unpublishPort?.(t.externalId, plan.port).catch(() => undefined);
+    url = null;
+  } else {
+    const prefix = t.repository
+      .split('/')
+      .pop()!
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/^-+|-+$/g, '')
+      .slice(0, 30)
+      .replace(/-+$/, '');
+    url = (
+      await deps.serverHost.publishPort(t.externalId, plan.port, 'preview', prefix || undefined)
+    ).url;
+  }
   await withOrganization(deps.pool, actor.organizationId, (client) =>
     client.query(
       'UPDATE project_servers SET dev_port = $2, dev_command = $3, preview_url = $4, dev_started_at = now() WHERE id = $1',
@@ -209,7 +229,11 @@ export async function startDev(
     ),
   );
   await journal(deps, actor, projectId, 'dev.started', { port: plan.port, command: plan.command });
-  return { ...(await devStatus(deps, actor, projectId)), previewUrl: url, port: plan.port };
+  return {
+    ...(await devStatus(deps, actor, projectId)),
+    previewUrl: url ?? previewEntry(deps, projectId),
+    port: plan.port,
+  };
 }
 
 /** Where the dev server stands: phase, process, what its port answers, branch, the logs' end. */
@@ -241,7 +265,8 @@ export async function devStatus(
   return {
     ...state,
     logs: redact(state.logs, t.values),
-    previewUrl: t.previewUrl,
+    previewUrl: privatePreviews(deps) ? previewEntry(deps, projectId) : t.previewUrl,
+    ...(privatePreviews(deps) ? { private: true } : {}),
     port: t.devPort,
     ...(health
       ? {
@@ -253,6 +278,27 @@ export async function devStatus(
         }
       : {}),
   };
+}
+
+/** A fresh private link to the preview, for the person signed in (or for someone they share it with). */
+export async function previewLink(
+  deps: DevLoopDeps,
+  actor: Actor,
+  projectId: string,
+  hours?: number,
+): Promise<{ url: string; expiresAt: string | null; shared: boolean }> {
+  const t = await target(deps, actor, projectId);
+  if (!t.devPort) throw new AppError('dev.no_preview', 404, 'No preview yet: start dev.');
+  if (!deps.serverHost.previewLink) {
+    if (!t.previewUrl) throw new AppError('dev.no_preview', 404, 'No preview yet: start dev.');
+    return { url: t.previewUrl, expiresAt: null, shared: false };
+  }
+  const seconds = hours
+    ? Math.min(Math.max(1, Math.round(hours)), 168) * 3600
+    : OWN_PREVIEW_SECONDS;
+  const link = await deps.serverHost.previewLink(t.externalId, t.devPort, seconds);
+  if (hours) await journal(deps, actor, projectId, 'dev.preview_shared', { hours });
+  return { url: link.url, expiresAt: link.expiresAt.toISOString(), shared: Boolean(hours) };
 }
 
 export async function stopDev(deps: DevLoopDeps, actor: Actor, projectId: string): Promise<void> {
@@ -421,7 +467,15 @@ export async function runOn(
     command: redact(command, t.values).slice(0, 200),
     ...(result.job ? { job: result.job } : { exitCode: result.exitCode }),
   });
-  return { ...result, output: redact(result.output, t.values) };
+  const output = redact(result.output, t.values);
+  return blockedByNetwork(output)
+    ? {
+        ...result,
+        output,
+        blocked:
+          "The server's network is limited: a domain this command needs is not allowed. Tell the person which domain, and that they can add it in the project's Network card in the console.",
+      }
+    : { ...result, output };
 }
 
 /** A background command's output so far, and its exit code once it ended. */
@@ -470,8 +524,14 @@ export function devRoutes(deps: DevLoopDeps): Hono<AppEnv> {
       return c.json(await pushChanges(deps, c.var.actor, c.req.param('id'), body.data.message));
     })
     .get('/projects/:id/preview', async (c) => {
-      const t = await target(deps, c.var.actor, c.req.param('id')).catch(() => null);
-      if (!t?.previewUrl) throw new AppError('dev.no_preview', 404, 'No preview yet: start dev.');
-      return c.redirect(t.previewUrl);
+      const link = await previewLink(deps, c.var.actor, c.req.param('id'));
+      return c.redirect(link.url);
+    })
+    .post('/projects/:id/preview/share', async (c) => {
+      const body = z
+        .object({ hours: z.number().int().min(1).max(168) })
+        .safeParse(await c.req.json().catch(() => null));
+      if (!body.success) throw new AppError('request.invalid', 400, 'Expected hours, 1 to 168.');
+      return c.json(await previewLink(deps, c.var.actor, c.req.param('id'), body.data.hours));
     });
 }

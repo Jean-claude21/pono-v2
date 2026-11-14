@@ -18,6 +18,8 @@ export interface Connectable {
   readonly keyUrl?: string;
   /** What the key must be allowed to do, said in the provider's words. */
   readonly keyScopes?: string;
+  /** What a project server must reach to use this service, when its network is limited (D-031). */
+  readonly serverDomains?: readonly string[];
   /**
    * Sign-in at the provider instead of a key (OAuth), when Pono has an application there: the
    * person clicks, allows, and comes back connected.

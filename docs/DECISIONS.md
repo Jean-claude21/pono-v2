@@ -402,3 +402,31 @@ du dev dit si le serveur a manqué de mémoire ou redémarré ; l'exploitant rec
 depuis l'admin (une page de paiement du fournisseur). Repérés pour la suite : sauvegarde et
 restauration d'un serveur, copie d'un serveur, previews privées signées, gabarits de serveur avec
 les outils déjà installés, et les agents qui tournent sur le serveur lui-même.
+
+## D-031 — Le serveur d'un projet a ses filets : preview privée, réseau limité, sauvegardes
+
+**Tranché le 2026-11-14.**
+
+- **Preview privée.** Aucun port du serveur n'est plus ouvert à internet. L'adresse de la preview
+  passe par Pono (`/v1/projects/:id/preview`), qui vérifie qui l'ouvre puis donne un lien signé du
+  fournisseur valable 12 h. Pour montrer le travail à quelqu'un sans compte, « Partager 24 h » (ou
+  `share_preview`, de 1 à 168 h) donne un lien qui se ferme seul. Un lien partagé ne se révoque pas
+  avant son terme : on choisit une durée courte.
+- **Réseau.** Ouvert par défaut. Limité, le serveur ne joint que les registres de paquets,
+  l'hébergeur de code, les services de l'hébergeur de serveurs, les domaines de chaque service
+  connecté, et ceux que la personne ajoute (60 au plus). Le choix s'applique en quelques secondes,
+  sans redémarrage, et suit le serveur s'il est donné plus tard. Seule la personne le change, dans
+  la console ; une commande refusée par le réseau le dit à l'agent, qui nomme le domaine à ajouter.
+- **Sauvegardes.** Chaque nuit, sept gardées, plus une à la demande toutes les 15 minutes. L'agent
+  peut sauvegarder avant un geste risqué (`backup_server`) ; seule la personne restaure, depuis la
+  console, après confirmation. La restauration remplace tous les fichiers et arrête le serveur de
+  dev ; elle se poursuit après la réponse et le journal dit sa fin.
+
+**Prouvé** sur un vrai serveur Agent37 (`apps/api/scripts/safety-live.ts`, 22 s) : sans lien la
+preview répond 401, le lien signé la sert ; un domaine non listé est refusé
+(`ERR_SSL_TLSV1_ALERT_ACCESS_DENIED`, reconnu par Pono) ; un fichier changé après la sauvegarde
+revient tel qu'il était.
+
+**Restent pour la suite** : un gabarit de serveur Pono (outils déjà installés), la copie d'un
+serveur pour essayer sans risque, et l'agent qui tourne sur le serveur lui-même, qui attend la
+décision sur qui paie l'IA.

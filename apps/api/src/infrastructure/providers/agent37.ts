@@ -2,7 +2,9 @@ import type { Agent, ServerStatus } from '../../features/servers/domain.js';
 import type {
   CreateServer,
   HostedServer,
+  NetworkPolicy,
   ProjectServerHost,
+  ServerBackup,
 } from '../../features/servers/ports.js';
 import { fetchJson, ProviderError, type Fetch } from '../../platform/http.js';
 
@@ -48,6 +50,27 @@ export function serverStatus(status: string): ServerStatus {
       return 'failed';
   }
 }
+
+/** Agent37's own words for a network policy (docs: instance-network, 2026-11-14). */
+export function networkBody(policy: NetworkPolicy): unknown {
+  if (policy === 'open') return 'allow-all';
+  if (policy === 'closed') return 'deny-all';
+  return { allow: [...new Set(policy.allow.map((d) => d.toLowerCase()))].slice(0, 100) };
+}
+
+interface BackupAnswer {
+  id: string;
+  kind: string;
+  created: number;
+  size_bytes: number;
+}
+
+const backup = (b: BackupAnswer): ServerBackup => ({
+  id: b.id,
+  kind: b.kind === 'manual' ? 'manual' : 'automatic',
+  createdAt: new Date(b.created * 1000),
+  sizeBytes: b.size_bytes,
+});
 
 function hosted(i: InstanceAnswer): HostedServer {
   const r = i.resources ?? RESOURCES;
@@ -154,6 +177,53 @@ export function agent37Host(options: {
         ...(prefix ? { prefix } : {}),
       });
       return { url: opened.url };
+    },
+    async previewLink(externalId, port, ttlSeconds) {
+      const answer = await call<{ url: string; expires_at: number }>(
+        `/instances/${externalId}/signed-url`,
+        'POST',
+        { port, ttl_seconds: Math.min(Math.max(60, Math.round(ttlSeconds)), 7 * 24 * 3600) },
+      );
+      return { url: answer.url, expiresAt: new Date(answer.expires_at * 1000) };
+    },
+    async unpublishPort(externalId, port) {
+      try {
+        await call(`/instances/${externalId}/public-ports/${port}`, 'DELETE');
+      } catch (error) {
+        if (error instanceof ProviderError && error.status === 404) return;
+        throw error;
+      }
+    },
+    async setNetwork(externalId, policy) {
+      const body = { network: networkBody(policy) };
+      try {
+        await call(`/instances/${externalId}`, 'PATCH', body);
+      } catch (error) {
+        // 503 try_again: saved, reaches the server within two minutes; asked once more to confirm.
+        if (error instanceof ProviderError && error.status === 503)
+          await call(`/instances/${externalId}`, 'PATCH', body);
+        else throw error;
+      }
+    },
+    networkNeeds: ['api.agent37.com'],
+    backups: {
+      async list(externalId) {
+        const answer = await call<{ data: BackupAnswer[] }>(`/instances/${externalId}/backups`);
+        return answer.data.map(backup);
+      },
+      async create(externalId) {
+        return backup(
+          await call<BackupAnswer>(
+            `/instances/${externalId}/backups`,
+            'POST',
+            undefined,
+            15 * 60_000,
+          ),
+        );
+      },
+      async restore(externalId, backupId) {
+        await call(`/instances/${externalId}/restore`, 'POST', { backup: backupId }, 13 * 60_000);
+      },
     },
     async destroy(externalId) {
       try {

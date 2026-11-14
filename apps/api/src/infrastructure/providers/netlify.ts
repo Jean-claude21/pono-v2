@@ -69,6 +69,7 @@ export function netlifyHosting(
     kind: 'hosting',
     fields: ['token'],
     keyUrl: 'https://app.netlify.com/user/applications#personal-access-tokens',
+    serverDomains: ['api.netlify.com', '*.netlify.app'],
     keyScopes: 'A personal access token (no expiry, or the longest you accept)',
     ...(app
       ? {

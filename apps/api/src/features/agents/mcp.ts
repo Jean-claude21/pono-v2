@@ -22,6 +22,7 @@ import {
   devStatus,
   jobOutput,
   LIMITS,
+  previewLink,
   pullChanges,
   pushChanges,
   runOn,
@@ -34,7 +35,15 @@ import { LEVEL_GUIDANCE, LEVELS, levelOf, setLevel } from '../identity/index.js'
 import { manifestView, proposeSkills } from '../manifest/index.js';
 import { importProject, refreshProject } from '../projects/application.js';
 import { evaluateReleases, listReleases, requestRollback } from '../releases/index.js';
-import { serversView, sleepServer, syncServers, wakeServer } from '../servers/index.js';
+import {
+  backupServer,
+  listBackups,
+  networkView,
+  serversView,
+  sleepServer,
+  syncServers,
+  wakeServer,
+} from '../servers/index.js';
 import { readUsage, usageView, type UsageDeps } from '../usage/index.js';
 import { connectUrl, MISSING_BY_CODE, whatIsMissing } from './needs.js';
 import { mcpUnauthorized } from './oauth.js';
@@ -64,7 +73,14 @@ write_file and run_command. Read a file before you edit it: edit_file needs old_
 edit that breaks a file's syntax is refused; after a change, devServer shows the dev server's
 errors: fix them before going on. undo_edit puts a file back. The preview reloads by itself: give its address
 to the person after a visible change. Look at show_changes, then push_changes to save the work on
-dev; propose_release when the person wants it in production.`;
+dev; propose_release when the person wants it in production.
+
+The preview is private: its address opens for the person signed in to Pono. To show it to someone
+else (a client, a friend), share_preview gives a link that lasts the hours chosen. Before a risky
+step (a migration, a large rewrite, deleting files), call backup_server: a restore point the person
+can return to from the console. You never restore yourself. When run_command answers blocked, the
+server's network is limited: tell the person which domain is needed and that they add it in the
+project's Network card (get_network shows what is allowed).`;
 
 type Text = { content: { type: 'text'; text: string }[]; isError?: boolean };
 
@@ -413,6 +429,66 @@ function buildServer(deps: McpDeps, actor: Actor, scope: 'read' | 'act'): McpSer
   const project = {
     projectId: z.string().describe('The project, from list_projects or find_project.'),
   };
+
+  server.registerTool(
+    'share_preview',
+    {
+      description:
+        "A link to the project's preview that someone without a Pono account can open, valid for the hours chosen (1 to 168), then closed by itself. Give it only to whom the person named.",
+      inputSchema: { ...project, hours: z.number().int().min(1).max(168).default(24) },
+      annotations: act,
+    },
+    async ({ projectId, hours }) => acting(() => previewLink(deps, actor, projectId, hours)),
+  );
+
+  server.registerTool(
+    'get_network',
+    {
+      description:
+        "Where the project's server may connect: open (anywhere) or limited (the registries, the code host, the connected services and the domains the person added). Only the person changes it, in the console.",
+      inputSchema: project,
+      annotations: read,
+    },
+    async ({ projectId }) =>
+      guard(async () => ({
+        ...(await networkView(deps, actor, projectId)),
+        changeAt: `${deps.publicUrl}/projects/${projectId}`,
+      })),
+  );
+
+  async function serverIdOf(projectId: string): Promise<string> {
+    const status = (await projectStatus(deps, actor, projectId)) as { server_id: string | null };
+    if (!status.server_id)
+      throw new AppError('dev.no_server', 409, 'Give this project a server first.');
+    return status.server_id;
+  }
+
+  server.registerTool(
+    'list_backups',
+    {
+      description:
+        "The server's restore points, newest first: the last seven nights and the last one taken on demand. Restoring is the person's decision, in the console.",
+      inputSchema: project,
+      annotations: read,
+    },
+    async ({ projectId }) =>
+      guard(async () => ({
+        ...(await listBackups(deps, actor, await serverIdOf(projectId))),
+        restoreAt: `${deps.publicUrl}/projects/${projectId}`,
+      })),
+  );
+
+  server.registerTool(
+    'backup_server',
+    {
+      description:
+        'Saves a restore point of the whole server now (files, installed packages, local data), without stopping it. Call it before a risky step. One every 15 minutes; it replaces the previous one taken on demand.',
+      inputSchema: project,
+      annotations: act,
+    },
+    async ({ projectId }) =>
+      acting(async () => backupServer(deps, actor, await serverIdOf(projectId))),
+  );
 
   server.registerTool(
     'list_files',
