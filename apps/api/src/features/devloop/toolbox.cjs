@@ -82,11 +82,18 @@ function syntaxError(path, text) {
     }
   }
   if (ext === '.js' || ext === '.cjs' || ext === '.mjs') {
-    const tmp = p.join('.pono', 'tmp', 'check' + ext);
-    fs.mkdirSync(p.dirname(tmp), { recursive: true });
-    fs.writeFileSync(tmp, text);
-    const r = cp.spawnSync(process.execPath, ['--check', tmp], { encoding: 'utf8' });
-    if (r.status === 0) return null;
+    // A .js file may be a script or a module: it parses if either reading accepts it (older Node
+    // does not guess modules by itself).
+    const tries = ext === '.js' ? ['.cjs', '.mjs'] : [ext];
+    fs.mkdirSync(p.join('.pono', 'tmp'), { recursive: true });
+    let r = null;
+    let tmp = '';
+    for (const as of tries) {
+      tmp = p.join('.pono', 'tmp', 'check' + as);
+      fs.writeFileSync(tmp, text);
+      r = cp.spawnSync(process.execPath, ['--check', tmp], { encoding: 'utf8' });
+      if (r.status === 0) return null;
+    }
     return (r.stderr || '')
       .split('\n')
       .filter(Boolean)
