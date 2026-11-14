@@ -11,9 +11,29 @@ export type SkillFamily = 'safety' | 'opinion' | 'design';
 /** Where an entry comes from (D-016): Pono's files, the operator, an organization, or shared. */
 export type Scope = 'pono' | 'official' | 'private' | 'proposed' | 'shared' | 'refused';
 
+/** The families a template belongs to, in the order the gallery shows them (D-033). */
+export const CATEGORIES = [
+  'presence',
+  'commerce',
+  'services',
+  'tools',
+  'software',
+  'free',
+] as const;
+export type Category = (typeof CATEGORIES)[number];
+
+/** What a template's project will ask to connect, said before launch (D-029, D-033). */
+export const TEMPLATE_NEEDS = ['hosting', 'database', 'analytics', 'payments', 'emails'] as const;
+export type TemplateNeed = (typeof TEMPLATE_NEEDS)[number];
+
 export interface Template {
   id: string;
   category: string;
+  /** A variant names its template: it inherits stack, skills, needs and starter, and adds its own. */
+  parent?: string | undefined;
+  /** The levels it suits (D-015); all of them when absent. */
+  levels?: ('guided' | 'choosing' | 'expert')[] | undefined;
+  needs?: TemplateNeed[] | undefined;
   name: { fr: string; en: string };
   description: { fr: string; en: string };
   stack: string[];
@@ -170,6 +190,74 @@ export function loadCatalog(dir: URL = CATALOG_DIR): Catalog {
   return catalog;
 }
 
+/**
+ * A template as launched: a variant takes its parent's stack, skills, needs and starter, then its
+ * own on top. A parent that is gone leaves the variant as it is; a chain stops after three steps.
+ */
+export function resolveTemplate(templates: Template[], id: string): Template | undefined {
+  const own = templates.find((t) => t.id === id);
+  if (!own) return undefined;
+  let resolved = own;
+  let parentId = own.parent;
+  for (let depth = 0; parentId && depth < 3; depth++) {
+    const parent = templates.find((t) => t.id === parentId);
+    if (!parent) break;
+    resolved = {
+      ...resolved,
+      stack: resolved.stack.length ? resolved.stack : parent.stack,
+      skills: [...new Set([...parent.skills, ...resolved.skills])],
+      needs: [...new Set([...(parent.needs ?? []), ...(resolved.needs ?? [])])],
+      ...(resolved.starter ? {} : parent.starter ? { starter: parent.starter } : {}),
+      ...(resolved.levels ? {} : parent.levels ? { levels: parent.levels } : {}),
+    };
+    parentId = parent.parent;
+  }
+  return resolved;
+}
+
+/** What a template brings, counted over every organization, with nothing of any one of them. */
+export interface TemplateValue {
+  launched: number;
+  /** Projects of the template whose production answers. */
+  live: number;
+  /** Median minutes from the launch to the first dev server started; null before any. */
+  minutesToPreview: number | null;
+}
+
+export async function templateValues(pool: Pool): Promise<Map<string, TemplateValue>> {
+  const { rows } = await pool.query<{
+    template: string;
+    launched: string;
+    live: string;
+    minutes_to_preview: string | null;
+  }>('SELECT template, launched, live, minutes_to_preview FROM template_values()');
+  return new Map(
+    rows.map((r) => [
+      r.template,
+      {
+        launched: Number(r.launched),
+        live: Number(r.live),
+        minutesToPreview: r.minutes_to_preview === null ? null : Number(r.minutes_to_preview),
+      },
+    ]),
+  );
+}
+
+/** The gallery: templates and variants, resolved, with their value; ordered by category. */
+export async function templateGallery(pool: Pool, templates: Template[]) {
+  const values = await templateValues(pool).catch(() => new Map<string, TemplateValue>());
+  const none: TemplateValue = { launched: 0, live: 0, minutesToPreview: null };
+  return templates
+    .map((t) => ({ ...resolveTemplate(templates, t.id)!, value: values.get(t.id) ?? none }))
+    .sort(
+      (a, b) =>
+        CATEGORIES.indexOf(a.category as Category) - CATEGORIES.indexOf(b.category as Category) ||
+        Number(Boolean(a.parent)) - Number(Boolean(b.parent)) ||
+        b.value.live - a.value.live ||
+        a.id.localeCompare(b.id),
+    );
+}
+
 // --- Validation of what an organization or the operator brings ---
 
 const entryName = z.string().regex(/^[a-z0-9][a-z0-9-]{1,48}$/);
@@ -177,7 +265,14 @@ const words = z.object({ fr: z.string().min(1).max(300), en: z.string().min(1).m
 
 export const templateInput = z.strictObject({
   id: entryName,
-  category: z.enum(['free', 'services', 'commerce', 'software', 'presence']),
+  category: z.enum(CATEGORIES),
+  parent: entryName.optional(),
+  levels: z
+    .array(z.enum(['guided', 'choosing', 'expert']))
+    .min(1)
+    .max(3)
+    .optional(),
+  needs: z.array(z.enum(TEMPLATE_NEEDS)).max(5).optional(),
   name: words,
   description: words,
   stack: z.array(z.string().min(1).max(40)).max(12),
@@ -404,7 +499,12 @@ const card = ({ name, family, description, scope, files }: Skill) => ({
 export function catalogRoutes(deps: CatalogDeps): Hono<AppEnv> {
   const of = (actor: Actor) => catalogFor(deps.pool, deps.catalog, actor.organizationId);
   return new Hono<AppEnv>()
-    .get('/templates', async (c) => c.json({ templates: (await of(c.var.actor)).templates }))
+    .get('/templates', async (c) =>
+      c.json({
+        categories: CATEGORIES,
+        templates: await templateGallery(deps.pool, (await of(c.var.actor)).templates),
+      }),
+    )
     .get('/skills', async (c) => c.json({ skills: (await of(c.var.actor)).skills.map(card) }))
     .get('/skills/:name', async (c) => {
       const skill = (await of(c.var.actor)).skills.find((s) => s.name === c.req.param('name'));

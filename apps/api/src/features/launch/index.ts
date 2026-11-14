@@ -5,7 +5,7 @@ import { withOrganization } from '../../platform/db.js';
 import { AppError } from '../../platform/errors.js';
 import { ProviderError } from '../../platform/http.js';
 import { siteForLaunch, type SiteAnalytics } from '../analytics/index.js';
-import { catalogFor, type Catalog } from '../catalog/index.js';
+import { catalogFor, resolveTemplate, type Catalog } from '../catalog/index.js';
 import { activeCredentials } from '../connections/index.js';
 import { record } from '../journal/index.js';
 import { writeManifest } from '../manifest/domain.js';
@@ -77,7 +77,7 @@ export async function launchProject(
 ): Promise<Launched> {
   const started = Date.now();
   const catalog = await catalogFor(deps.pool, deps.catalog, actor.organizationId);
-  const template = catalog.templates.find((t) => t.id === input.template);
+  const template = resolveTemplate(catalog.templates, input.template);
   if (!template) throw new AppError('template.not_found', 404, 'No such template.');
 
   await withOrganization(deps.pool, actor.organizationId, async (client) => {

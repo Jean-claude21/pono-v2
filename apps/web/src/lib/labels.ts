@@ -53,6 +53,7 @@ const tables: Record<string, Record<string, () => string>> = {
     services: m.category_services,
     commerce: m.category_commerce,
     software: m.category_software,
+    tools: m.category_tools,
     presence: m.category_presence,
   },
   serverStatus: {
@@ -209,6 +210,13 @@ const tables: Record<string, Record<string, () => string>> = {
     'ai.cost_30d': m.meter_ai_cost_30d,
     'servers.compute': m.meter_servers_compute,
     account: m.meter_account,
+  },
+  templateNeed: {
+    hosting: m.tneed_hosting,
+    database: m.tneed_database,
+    analytics: m.tneed_analytics,
+    payments: m.tneed_payments,
+    emails: m.tneed_emails,
   },
   error: {
     'dev.no_server': m.error_dev_no_server,

@@ -1,48 +1,82 @@
 [
   {
-    "id": "blank",
-    "category": "free",
+    "id": "site",
+    "category": "presence",
     "name": {
-      "fr": "Projet vide",
-      "en": "Empty project"
+      "fr": "Site vitrine",
+      "en": "Showcase site"
     },
     "description": {
-      "fr": "Une stack posée, rien d’autre. Ton agent construit librement.",
-      "en": "A stack in place, nothing else. Your agent builds freely."
+      "fr": "Pages, blog, formulaire de contact, référencement.",
+      "en": "Pages, blog, contact form, search visibility."
     },
-    "stack": ["Hono", "TanStack Start", "Neon"],
+    "stack": ["TanStack Start", "Cloudflare"],
     "skills": [
       "pono-basics",
-      "safe-migrations",
       "no-secrets",
       "pono-stack",
       "feature-architecture",
-      "impeccable"
-    ]
+      "impeccable",
+      "seo",
+      "emails"
+    ],
+    "needs": ["hosting", "analytics", "emails"]
   },
   {
-    "id": "booking",
-    "category": "services",
+    "id": "site-portfolio",
+    "category": "presence",
+    "parent": "site",
     "name": {
-      "fr": "Prise de rendez-vous",
-      "en": "Booking"
+      "fr": "Portfolio",
+      "en": "Portfolio"
     },
     "description": {
-      "fr": "Agenda, créneaux, rappels par email, acompte en ligne.",
-      "en": "Calendar, slots, email reminders, online deposit."
+      "fr": "Tes travaux en galerie, une page par projet, prise de contact.",
+      "en": "Your work in a gallery, a page per project, a way to reach you."
+    },
+    "stack": [],
+    "skills": []
+  },
+  {
+    "id": "site-event",
+    "category": "presence",
+    "parent": "site",
+    "name": {
+      "fr": "Événement",
+      "en": "Event"
+    },
+    "description": {
+      "fr": "Programme, intervenants, inscriptions, rappel par email.",
+      "en": "Programme, speakers, sign-ups, email reminder."
+    },
+    "stack": [],
+    "skills": [],
+    "needs": ["database"]
+  },
+  {
+    "id": "launch-page",
+    "category": "presence",
+    "name": {
+      "fr": "Page de lancement",
+      "en": "Launch page"
+    },
+    "description": {
+      "fr": "Une page qui présente ton idée et une liste d’attente.",
+      "en": "One page that presents your idea, and a waiting list."
     },
     "stack": ["TanStack Start", "Neon", "Cloudflare"],
     "skills": [
       "pono-basics",
-      "safe-migrations",
       "no-secrets",
-      "auth",
-      "payments",
-      "emails",
       "pono-stack",
       "feature-architecture",
-      "impeccable"
-    ]
+      "impeccable",
+      "safe-migrations",
+      "seo",
+      "emails"
+    ],
+    "needs": ["hosting", "database", "analytics", "emails"],
+    "levels": ["guided", "choosing"]
   },
   {
     "id": "shop",
@@ -52,21 +86,52 @@
       "en": "Online shop"
     },
     "description": {
-      "fr": "Catalogue, panier, paiement, suivi des commandes, back-office.",
-      "en": "Catalogue, cart, payment, order tracking, back office."
+      "fr": "Catalogue, panier, paiement mobile money et carte, suivi des commandes, back-office.",
+      "en": "Catalogue, cart, mobile money and card payment, order tracking, back office."
     },
-    "stack": ["TanStack Start", "Neon", "Stripe"],
+    "stack": ["TanStack Start", "Neon", "Moneroo"],
     "skills": [
       "pono-basics",
-      "safe-migrations",
       "no-secrets",
-      "auth",
-      "payments",
-      "emails",
       "pono-stack",
       "feature-architecture",
-      "impeccable"
-    ]
+      "impeccable",
+      "safe-migrations",
+      "auth",
+      "payments",
+      "emails"
+    ],
+    "needs": ["hosting", "database", "payments", "emails"]
+  },
+  {
+    "id": "shop-digital",
+    "category": "commerce",
+    "parent": "shop",
+    "name": {
+      "fr": "Produits numériques",
+      "en": "Digital products"
+    },
+    "description": {
+      "fr": "Formations, ebooks, fichiers : paiement puis lien de téléchargement.",
+      "en": "Courses, ebooks, files: payment, then a download link."
+    },
+    "stack": [],
+    "skills": []
+  },
+  {
+    "id": "shop-restaurant",
+    "category": "commerce",
+    "parent": "shop",
+    "name": {
+      "fr": "Commande au restaurant",
+      "en": "Restaurant orders"
+    },
+    "description": {
+      "fr": "Menu, commande à emporter ou livrée, suivi en cuisine.",
+      "en": "Menu, take-away or delivered orders, kitchen tracking."
+    },
+    "stack": [],
+    "skills": []
   },
   {
     "id": "pos",
@@ -82,64 +147,104 @@
     "stack": ["TanStack Start", "Neon"],
     "skills": [
       "pono-basics",
-      "safe-migrations",
       "no-secrets",
-      "auth",
-      "exports",
       "pono-stack",
       "feature-architecture",
-      "impeccable"
-    ]
+      "impeccable",
+      "safe-migrations",
+      "auth",
+      "exports"
+    ],
+    "needs": ["hosting", "database"]
   },
   {
-    "id": "saas",
-    "category": "software",
+    "id": "pos-depot",
+    "category": "commerce",
+    "parent": "pos",
     "name": {
-      "fr": "SaaS avec abonnements",
-      "en": "SaaS with subscriptions"
+      "fr": "Dépôt et pharmacie",
+      "en": "Depot and pharmacy"
     },
     "description": {
-      "fr": "Comptes, équipes, abonnements, tableau de bord, emails.",
-      "en": "Accounts, teams, subscriptions, dashboard, emails."
+      "fr": "Lots, dates de péremption, plusieurs points de vente.",
+      "en": "Batches, expiry dates, several points of sale."
     },
-    "stack": ["Hono", "TanStack Start", "Neon", "Stripe"],
+    "stack": [],
+    "skills": []
+  },
+  {
+    "id": "booking",
+    "category": "services",
+    "name": {
+      "fr": "Prise de rendez-vous",
+      "en": "Booking"
+    },
+    "description": {
+      "fr": "Agenda, créneaux, rappels par email, acompte en ligne.",
+      "en": "Calendar, slots, email reminders, online deposit."
+    },
+    "stack": ["TanStack Start", "Neon", "Cloudflare"],
     "skills": [
       "pono-basics",
-      "safe-migrations",
       "no-secrets",
+      "pono-stack",
+      "feature-architecture",
+      "impeccable",
+      "safe-migrations",
       "auth",
       "payments",
-      "emails",
-      "pono-stack",
-      "feature-architecture",
-      "impeccable"
-    ]
+      "emails"
+    ],
+    "needs": ["hosting", "database", "payments", "emails"]
   },
   {
-    "id": "site",
-    "category": "presence",
+    "id": "booking-salon",
+    "category": "services",
+    "parent": "booking",
     "name": {
-      "fr": "Site vitrine",
-      "en": "Showcase site"
+      "fr": "Salon et beauté",
+      "en": "Salon and beauty"
     },
     "description": {
-      "fr": "Pages, blog, formulaire de contact, référencement.",
-      "en": "Pages, blog, contact form, search visibility."
+      "fr": "Prestations, coiffeurs ou esthéticiennes, durées, acompte.",
+      "en": "Services, staff, durations, deposit."
     },
-    "stack": ["TanStack Start", "Cloudflare"],
-    "skills": [
-      "pono-basics",
-      "no-secrets",
-      "seo",
-      "emails",
-      "pono-stack",
-      "feature-architecture",
-      "impeccable"
-    ]
+    "stack": [],
+    "skills": []
+  },
+  {
+    "id": "booking-practice",
+    "category": "services",
+    "parent": "booking",
+    "name": {
+      "fr": "Cabinet",
+      "en": "Practice"
+    },
+    "description": {
+      "fr": "Santé ou conseil : consultations, fiche client, rappels.",
+      "en": "Health or advice: consultations, client record, reminders."
+    },
+    "stack": [],
+    "skills": []
+  },
+  {
+    "id": "booking-classes",
+    "category": "services",
+    "parent": "booking",
+    "name": {
+      "fr": "Cours et coaching",
+      "en": "Classes and coaching"
+    },
+    "description": {
+      "fr": "Séances, places limitées, abonnements de séances.",
+      "en": "Sessions, limited places, session passes."
+    },
+    "stack": [],
+    "skills": []
   },
   {
     "id": "internal",
-    "category": "software",
+    "category": "tools",
     "name": {
       "fr": "Outil interne",
       "en": "Internal tool"
@@ -151,13 +256,92 @@
     "stack": ["Hono", "TanStack Start", "Neon"],
     "skills": [
       "pono-basics",
-      "safe-migrations",
       "no-secrets",
-      "auth",
-      "exports",
       "pono-stack",
       "feature-architecture",
-      "impeccable"
-    ]
+      "impeccable",
+      "safe-migrations",
+      "auth",
+      "exports"
+    ],
+    "needs": ["hosting", "database"]
+  },
+  {
+    "id": "dashboard",
+    "category": "tools",
+    "parent": "internal",
+    "name": {
+      "fr": "Tableau de bord",
+      "en": "Dashboard"
+    },
+    "description": {
+      "fr": "Tes chiffres en graphiques, lus depuis un tableur ou une base, mis à jour seuls.",
+      "en": "Your figures in charts, read from a spreadsheet or a database, kept up to date."
+    },
+    "stack": [],
+    "skills": []
+  },
+  {
+    "id": "saas",
+    "category": "software",
+    "name": {
+      "fr": "SaaS avec abonnements",
+      "en": "SaaS with subscriptions"
+    },
+    "description": {
+      "fr": "Comptes, abonnements, tableau de bord, emails.",
+      "en": "Accounts, subscriptions, dashboard, emails."
+    },
+    "stack": ["Hono", "TanStack Start", "Neon", "Moneroo"],
+    "skills": [
+      "pono-basics",
+      "no-secrets",
+      "pono-stack",
+      "feature-architecture",
+      "impeccable",
+      "safe-migrations",
+      "auth",
+      "payments",
+      "emails"
+    ],
+    "needs": ["hosting", "database", "payments", "emails"]
+  },
+  {
+    "id": "saas-teams",
+    "category": "software",
+    "parent": "saas",
+    "name": {
+      "fr": "SaaS en équipe",
+      "en": "Team SaaS"
+    },
+    "description": {
+      "fr": "Organisations, invitations, rôles, facturation par équipe.",
+      "en": "Organisations, invitations, roles, billing per team."
+    },
+    "stack": [],
+    "skills": []
+  },
+  {
+    "id": "blank",
+    "category": "free",
+    "name": {
+      "fr": "Projet vide",
+      "en": "Empty project"
+    },
+    "description": {
+      "fr": "Une stack posée, rien d’autre. Ton agent construit librement.",
+      "en": "A stack in place, nothing else. Your agent builds freely."
+    },
+    "stack": ["Hono", "TanStack Start", "Neon"],
+    "skills": [
+      "pono-basics",
+      "no-secrets",
+      "pono-stack",
+      "feature-architecture",
+      "impeccable",
+      "safe-migrations"
+    ],
+    "needs": ["hosting"],
+    "levels": ["choosing", "expert"]
   }
 ]
