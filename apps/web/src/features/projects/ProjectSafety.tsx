@@ -77,7 +77,7 @@ export function ProjectNetwork({ projectId }: Readonly<{ projectId: string }>) {
         <textarea
           rows={3}
           value={text}
-          placeholder="api.stripe.com&#10;*.supabase.co"
+          placeholder={m.network_placeholder()}
           onChange={(e) => setDraft(e.target.value)}
         />
       </label>

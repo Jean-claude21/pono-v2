@@ -814,5 +814,6 @@
   "action_server_backed_up": "Server backed up",
   "action_server_restore_started": "Restore started",
   "action_server_restored": "Server restored",
-  "action_server_restore_failed": "Restore failed"
+  "action_server_restore_failed": "Restore failed",
+  "network_placeholder": "api.stripe.com\n*.supabase.co"
 }
