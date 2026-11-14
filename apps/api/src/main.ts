@@ -117,7 +117,11 @@ const deps: AppDeps = {
     links: httpLinkChecker(fetch),
   },
   serverHost: config.AGENT37_API_KEY
-    ? agent37Host({ apiKey: config.AGENT37_API_KEY, fetch })
+    ? agent37Host({
+        apiKey: config.AGENT37_API_KEY,
+        fetch,
+        ...(config.PONO_SERVER_TEMPLATE ? { ponoTemplate: config.PONO_SERVER_TEMPLATE } : {}),
+      })
     : unavailableServerHost(),
   serverBudgetMicros: Math.round(config.PONO_SERVER_BUDGET_USD * 1_000_000),
   serverIdleSeconds: config.PONO_SERVER_IDLE_MINUTES * 60,

@@ -34,7 +34,7 @@ import { checkSecrets, listVariables, requestVariable, variableName } from '../v
 import { activeCredentials, type Connectable } from '../connections/index.js';
 import { LEVEL_GUIDANCE, LEVELS, levelOf, setLevel } from '../identity/index.js';
 import { manifestView, proposeSkills } from '../manifest/index.js';
-import { importProject, refreshProject } from '../projects/application.js';
+import { importProject, putOnline, refreshProject } from '../projects/application.js';
 import { evaluateReleases, listReleases, requestRollback } from '../releases/index.js';
 import {
   backupServer,
@@ -430,6 +430,17 @@ function buildServer(deps: McpDeps, actor: Actor, scope: 'read' | 'act'): McpSer
   const project = {
     projectId: z.string().describe('The project, from list_projects or find_project.'),
   };
+
+  server.registerTool(
+    'put_online',
+    {
+      description:
+        "Creates the project's production site at the connected hosting (Netlify), linked to its repository: it builds now, then on every merge to the default branch. Call what_is_missing with goal publish first. Production still changes only through proposals, under the project's release rule. Give the person the production address.",
+      inputSchema: project,
+      annotations: act,
+    },
+    async ({ projectId }) => acting(() => putOnline(deps, actor, projectId)),
+  );
 
   server.registerTool(
     'share_preview',

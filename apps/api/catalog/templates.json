@@ -10,7 +10,7 @@
       "fr": "Pages, blog, formulaire de contact, référencement.",
       "en": "Pages, blog, contact form, search visibility."
     },
-    "stack": ["TanStack Start", "Cloudflare"],
+    "stack": ["TanStack Start", "Netlify"],
     "skills": [
       "pono-basics",
       "no-secrets",
@@ -18,9 +18,12 @@
       "feature-architecture",
       "impeccable",
       "seo",
-      "emails"
+      "emails",
+      "frontend-design",
+      "webapp-testing"
     ],
-    "needs": ["hosting", "analytics", "emails"]
+    "needs": ["hosting", "analytics", "emails"],
+    "starter": "kete-africa/pono-starter-site"
   },
   {
     "id": "site-portfolio",
@@ -73,7 +76,10 @@
       "impeccable",
       "safe-migrations",
       "seo",
-      "emails"
+      "emails",
+      "supabase-postgres-best-practices",
+      "frontend-design",
+      "webapp-testing"
     ],
     "needs": ["hosting", "database", "analytics", "emails"],
     "levels": ["guided", "choosing"]
@@ -89,7 +95,7 @@
       "fr": "Catalogue, panier, paiement mobile money et carte, suivi des commandes, back-office.",
       "en": "Catalogue, cart, mobile money and card payment, order tracking, back office."
     },
-    "stack": ["TanStack Start", "Neon", "Moneroo"],
+    "stack": ["TanStack Start", "Neon", "Moneroo", "Netlify"],
     "skills": [
       "pono-basics",
       "no-secrets",
@@ -99,9 +105,14 @@
       "safe-migrations",
       "auth",
       "payments",
-      "emails"
+      "emails",
+      "supabase-postgres-best-practices",
+      "moneroo-payments",
+      "frontend-design",
+      "webapp-testing"
     ],
-    "needs": ["hosting", "database", "payments", "emails"]
+    "needs": ["hosting", "database", "payments", "emails"],
+    "starter": "kete-africa/pono-starter-shop"
   },
   {
     "id": "shop-digital",
@@ -153,7 +164,10 @@
       "impeccable",
       "safe-migrations",
       "auth",
-      "exports"
+      "exports",
+      "supabase-postgres-best-practices",
+      "frontend-design",
+      "webapp-testing"
     ],
     "needs": ["hosting", "database"]
   },
@@ -193,7 +207,11 @@
       "safe-migrations",
       "auth",
       "payments",
-      "emails"
+      "emails",
+      "supabase-postgres-best-practices",
+      "moneroo-payments",
+      "frontend-design",
+      "webapp-testing"
     ],
     "needs": ["hosting", "database", "payments", "emails"]
   },
@@ -262,7 +280,10 @@
       "impeccable",
       "safe-migrations",
       "auth",
-      "exports"
+      "exports",
+      "supabase-postgres-best-practices",
+      "frontend-design",
+      "webapp-testing"
     ],
     "needs": ["hosting", "database"]
   },
@@ -278,8 +299,9 @@
       "fr": "Tes chiffres en graphiques, lus depuis un tableur ou une base, mis à jour seuls.",
       "en": "Your figures in charts, read from a spreadsheet or a database, kept up to date."
     },
-    "stack": [],
-    "skills": []
+    "stack": ["TanStack Start", "Netlify"],
+    "skills": ["exports"],
+    "starter": "kete-africa/pono-starter-dashboard"
   },
   {
     "id": "saas",
@@ -302,7 +324,11 @@
       "safe-migrations",
       "auth",
       "payments",
-      "emails"
+      "emails",
+      "supabase-postgres-best-practices",
+      "moneroo-payments",
+      "frontend-design",
+      "webapp-testing"
     ],
     "needs": ["hosting", "database", "payments", "emails"]
   },
@@ -339,7 +365,10 @@
       "pono-stack",
       "feature-architecture",
       "impeccable",
-      "safe-migrations"
+      "safe-migrations",
+      "supabase-postgres-best-practices",
+      "frontend-design",
+      "webapp-testing"
     ],
     "needs": ["hosting"],
     "levels": ["choosing", "expert"]

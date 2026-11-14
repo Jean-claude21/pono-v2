@@ -824,5 +824,11 @@
   "tneed_database": "une base de données",
   "tneed_analytics": "un compteur de visites",
   "tneed_payments": "le paiement (Moneroo)",
-  "tneed_emails": "l’envoi d’emails"
+  "tneed_emails": "l’envoi d’emails",
+  "project_put_online": "Mettre en ligne",
+  "project_online_done": "Le site est créé et se construit : {url}. Il sera en ligne dans une minute ou deux, puis suivra chaque fusion sur la branche principale.",
+  "project_online_no_hosting": "Relie d’abord un hébergeur (Netlify) dans Services connectés : Pono y créera le site.",
+  "error_code_host_permission_missing": "GitHub refuse d’ajouter la clé de lecture : l’application Pono a besoin de la permission « Administration » sur ce dépôt. Accepte la mise à jour des permissions dans GitHub, puis recommence.",
+  "error_hosting_name_taken": "Aucun nom libre n’a été trouvé chez l’hébergeur : réessaie.",
+  "action_project_site_created": "Site de production créé"
 }

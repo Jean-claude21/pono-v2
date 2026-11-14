@@ -2,6 +2,11 @@
 -- the median time from launch to the first dev server. Counted over every organization; nothing of
 -- any one of them leaves this function.
 
+-- The function reads, as the owner, only the first dev start of each project: nothing else of the
+-- journal is opened to it.
+CREATE POLICY journal_owner_read_dev_started ON journal FOR SELECT TO pono_owner
+  USING (action = 'dev.started');
+
 CREATE FUNCTION template_values()
   RETURNS TABLE (template text, launched bigint, live bigint, minutes_to_preview numeric)
   LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public

@@ -824,5 +824,11 @@
   "tneed_database": "a database",
   "tneed_analytics": "a visits counter",
   "tneed_payments": "payment (Moneroo)",
-  "tneed_emails": "sending emails"
+  "tneed_emails": "sending emails",
+  "project_put_online": "Put online",
+  "project_online_done": "The site is created and building: {url}. It will be live in a minute or two, then follow every merge to the main branch.",
+  "project_online_no_hosting": "Connect a hosting (Netlify) in Connected services first: Pono will create the site there.",
+  "error_code_host_permission_missing": "GitHub refuses to add the read key: the Pono app needs the “Administration” permission on this repository. Accept the permission update on GitHub, then try again.",
+  "error_hosting_name_taken": "No free name was found at the hosting: try again.",
+  "action_project_site_created": "Production site created"
 }

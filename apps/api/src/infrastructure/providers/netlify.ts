@@ -102,6 +102,43 @@ export function netlifyHosting(
     async verify(fields) {
       return account(fields.token!);
     },
+    async newDeployKey(token) {
+      const key = await fetchJson<{ id: string; public_key: string }>(fetchImpl, {
+        provider: ID,
+        url: `${API}/deploy_keys`,
+        method: 'POST',
+        headers: headers(token),
+      });
+      return { id: key.id, publicKey: key.public_key };
+    },
+    async createSite(token, input) {
+      // `repo_path` is the git address: Netlify clones it with the deploy key (D-037).
+      const created = await fetchJson<SiteAnswer & { deploy_hook?: string | null }>(fetchImpl, {
+        provider: ID,
+        url: `${API}/sites`,
+        method: 'POST',
+        headers: headers(token),
+        body: {
+          name: input.name,
+          repo: {
+            provider: 'manual',
+            repo_path: input.gitUrl,
+            repo_url: input.gitUrl,
+            repo_branch: input.branch,
+            deploy_key_id: input.deployKeyId,
+          },
+        },
+      });
+      return { site: site(created), pushHookUrl: created.deploy_hook ?? null };
+    },
+    async startBuild(token, ref) {
+      await fetchJson(fetchImpl, {
+        provider: ID,
+        url: `${API}/sites/${ref}/builds`,
+        method: 'POST',
+        headers: headers(token),
+      });
+    },
     async findSite(token, repository) {
       const sites = await fetchJson<SiteAnswer[]>(fetchImpl, {
         provider: ID,

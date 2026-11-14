@@ -70,7 +70,8 @@ const CATALOG_DIR = new URL('../../../catalog/', import.meta.url);
 /** The standard's name rule: lowercase letters, digits and single hyphens, at most 64. */
 export const SKILL_NAME = /^[a-z0-9]+(-[a-z0-9]+)*$/;
 /** Files a skill may carry beside its SKILL.md. */
-export const SKILL_FILE = /^(references|scripts|assets)(\/(?!\.\.?(\/|$))[\w.-]+)+$/;
+export const SKILL_FILE =
+  /^(?:(references|scripts|assets|examples)(\/(?!\.\.?(\/|$))[\w.-]+)+|LICENSE(?:\.txt|\.md)?)$/;
 
 /**
  * Reads a SKILL.md: its YAML front matter (name, description, metadata.family, license,
@@ -142,8 +143,12 @@ export function loadSkillFolders(dir: URL): Skill[] {
             files[path] = readFileSync(new URL(path, root), 'utf8');
         }
       };
-      for (const top of ['references', 'scripts', 'assets'])
-        if (readdirSync(root).includes(top)) walk(`${top}/`);
+      const here = readdirSync(root);
+      for (const top of ['references', 'scripts', 'assets', 'examples'])
+        if (here.includes(top)) walk(`${top}/`);
+      // A third-party skill keeps its licence beside it (D-035).
+      for (const licence of here.filter((f) => /^LICENSE(\.txt|\.md)?$/.test(f)))
+        files[licence] = readFileSync(new URL(licence, root), 'utf8');
       return Object.keys(files).length ? { ...skill, files } : skill;
     })
     .sort((a, b) => a.name.localeCompare(b.name));
