@@ -1,5 +1,6 @@
 import { createHmac, randomUUID } from 'node:crypto';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { createApp } from '../src/app.js';
 import { stripeBilling, verifyStripeSignature } from '../src/infrastructure/providers/stripe.js';
 import { withOrganization } from '../src/platform/db.js';
 import { call, signIn, testApp, type TestApp } from './support/app.js';
@@ -94,6 +95,33 @@ describe('administration (phase 7)', () => {
     const res = await call(t, cookie, '/v1/admin/overview');
     expect(res.status).toBe(403);
     expect((await res.json()).error.code).toBe('admin.forbidden');
+    const topUp = await call(t, cookie, '/v1/admin/wallet/top-up', {
+      method: 'POST',
+      body: { amountUsd: 10 },
+    });
+    expect(topUp.status).toBe(403);
+  });
+
+  it('tops up the server wallet only when the provider has one, within bounds', async () => {
+    const operator = await signIn(t, 'operator');
+    const none = await call(t, operator, '/v1/admin/wallet/top-up', {
+      method: 'POST',
+      body: { amountUsd: 10 },
+    });
+    expect((await none.json()).error.code).toBe('admin.no_wallet');
+    t.deps.walletTopUp = async (usd) => `https://pay.test/${usd}`;
+    const t2 = { ...t, app: createApp(t.deps) };
+    const paid = await call(t2, operator, '/v1/admin/wallet/top-up', {
+      method: 'POST',
+      body: { amountUsd: 25 },
+    });
+    expect(await paid.json()).toEqual({ url: 'https://pay.test/25' });
+    const tooSmall = await call(t2, operator, '/v1/admin/wallet/top-up', {
+      method: 'POST',
+      body: { amountUsd: 1 },
+    });
+    expect(tooSmall.status).toBe(400);
+    delete t.deps.walletTopUp;
   });
 
   it('shows organizations, servers and revenue across the platform, and puts a server to sleep', async () => {

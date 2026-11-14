@@ -19,6 +19,8 @@ export interface AdminDeps {
   admins: string[];
   /** The server provider's workspace wallet, when it says it. */
   serverAccount?: () => Promise<{ balanceMicros: number; activeLimit: number } | null>;
+  /** Tops up that wallet: answers the provider's payment page. */
+  walletTopUp?: (amountUsd: number) => Promise<string>;
 }
 
 function onlyAdmins(deps: AdminDeps): MiddlewareHandler<AppEnv> {
@@ -60,6 +62,15 @@ export function adminRoutes(deps: AdminDeps): Hono<AppEnv> {
           (Object.keys(PLANS) as Plan[]).map((p) => [p, orgs.filter((o) => o.plan === p).length]),
         ),
       });
+    })
+    .post('/wallet/top-up', async (c) => {
+      if (!deps.walletTopUp)
+        throw new AppError('admin.no_wallet', 404, 'The server provider has no wallet to top up.');
+      const body = z
+        .object({ amountUsd: z.number().int().min(5).max(10_000) })
+        .safeParse(await c.req.json().catch(() => null));
+      if (!body.success) throw new AppError('request.invalid', 400, 'Between 5 and 10 000 USD.');
+      return c.json({ url: await deps.walletTopUp(body.data.amountUsd) });
     })
     .get('/organizations', async (c) => {
       const { rows } = await deps.pool.query<{

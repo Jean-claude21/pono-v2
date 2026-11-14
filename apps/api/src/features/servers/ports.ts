@@ -37,7 +37,20 @@ export interface ProjectServerHost {
   /** Starts a long command in the background (the project's dev server); answers its process id. */
   start(externalId: string, command: string): Promise<{ pid: number }>;
   /** Opens a port of the server to the internet; answers its address (stable for this server). */
-  publishPort(externalId: string, port: number, label: string): Promise<{ url: string }>;
+  publishPort(
+    externalId: string,
+    port: number,
+    label: string,
+    /** A readable start of the address (`boutique-lome-…`), when the provider allows one. */
+    prefix?: string,
+  ): Promise<{ url: string }>;
+  /** How the server holds up: restarts, memory exhausted; null fields when unknown. */
+  health?(externalId: string): Promise<{
+    running: boolean | null;
+    restarts: number;
+    outOfMemory: boolean;
+    verdict: string | null;
+  }>;
   /** The host suffix of published addresses, for dev servers that check their host (`.example.app`). */
   readonly publicHostSuffix: string | null;
 }

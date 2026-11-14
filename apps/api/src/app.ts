@@ -47,6 +47,7 @@ export interface AppDeps {
   analytics?: SiteAnalytics[];
   admins: string[];
   serverAccount?: () => Promise<{ balanceMicros: number; activeLimit: number } | null>;
+  walletTopUp?: (amountUsd: number) => Promise<string>;
   /** Signs the code host's push events (D-020). */
   webhookSecret?: string;
   /** Requests per minute and per caller; tests raise them. */

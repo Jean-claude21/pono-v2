@@ -132,6 +132,8 @@ async function journal(
 export interface DevView extends DevState {
   previewUrl: string | null;
   port: number | null;
+  /** The server's own health, when its host says it: a dev server killed by memory shows here. */
+  server?: { restarts: number; outOfMemory: boolean; verdict: string | null } | undefined;
 }
 
 /**
@@ -186,7 +188,20 @@ export async function startDev(
     t.externalId,
     startCommand({ repository: t.repository, plan, hostSuffix: deps.serverHost.publicHostSuffix }),
   );
-  const { url } = await deps.serverHost.publishPort(t.externalId, plan.port, 'preview');
+  const prefix = t.repository
+    .split('/')
+    .pop()!
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .slice(0, 30)
+    .replace(/-+$/, '');
+  const { url } = await deps.serverHost.publishPort(
+    t.externalId,
+    plan.port,
+    'preview',
+    prefix || undefined,
+  );
   await withOrganization(deps.pool, actor.organizationId, (client) =>
     client.query(
       'UPDATE project_servers SET dev_port = $2, dev_command = $3, preview_url = $4, dev_started_at = now() WHERE id = $1',
@@ -222,11 +237,21 @@ export async function devStatus(
     statusCommand(t.repository, t.devPort, lines),
   );
   const state = readStatus(out.stdout);
+  const health = await deps.serverHost.health?.(t.externalId).catch(() => null);
   return {
     ...state,
     logs: redact(state.logs, t.values),
     previewUrl: t.previewUrl,
     port: t.devPort,
+    ...(health
+      ? {
+          server: {
+            restarts: health.restarts,
+            outOfMemory: health.outOfMemory,
+            verdict: health.verdict,
+          },
+        }
+      : {}),
   };
 }
 

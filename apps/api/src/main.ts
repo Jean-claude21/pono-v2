@@ -8,7 +8,7 @@ import { serve } from '@hono/node-server';
 import { createApp, type AppDeps } from './app.js';
 import { loadCatalog } from './features/catalog/index.js';
 import { devIdentity, githubIdentity, type IdentityProvider } from './features/identity/index.js';
-import { agent37Account, agent37Host } from './infrastructure/providers/agent37.js';
+import { agent37Account, agent37Host, agent37TopUp } from './infrastructure/providers/agent37.js';
 import {
   devBilling,
   stripeBilling,
@@ -118,7 +118,10 @@ const deps: AppDeps = {
     .map((l) => l.trim())
     .filter(Boolean),
   ...(config.AGENT37_API_KEY
-    ? { serverAccount: agent37Account({ apiKey: config.AGENT37_API_KEY, fetch }) }
+    ? {
+        serverAccount: agent37Account({ apiKey: config.AGENT37_API_KEY, fetch }),
+        walletTopUp: agent37TopUp({ apiKey: config.AGENT37_API_KEY, fetch }),
+      }
     : {}),
   ...(config.PONO_WEBHOOK_SECRET ? { webhookSecret: config.PONO_WEBHOOK_SECRET } : {}),
   now: () => new Date(),
