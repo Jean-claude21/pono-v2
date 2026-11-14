@@ -1,3 +1,4 @@
+import { decodeExpiring, encodeExpiring, refresherOf, RENEW_BEFORE_MS } from './refresh.js';
 import { Hono } from 'hono';
 import { z } from 'zod';
 import type { Actor, AppEnv } from '../../platform/context.js';
@@ -123,24 +124,73 @@ export async function saveCodeHostConnection(
 }
 
 /** The active connections of the organization in context, with their opened credential. */
+export * from './refresh.js';
+
 export async function activeCredentials(
   client: Client,
   sealer: Sealer,
   kind?: ConnectionKind,
+  now: () => number = Date.now,
 ): Promise<{ provider: string; kind: ConnectionKind; credential: string }[]> {
   const { rows } = await client.query<{
+    id: string;
     provider: string;
     kind: ConnectionKind;
     sealed_credential: string;
   }>(
-    `SELECT provider, kind, sealed_credential FROM connections
+    `SELECT id, provider, kind, sealed_credential FROM connections
      WHERE status = 'active' AND ($1::text IS NULL OR kind = $1)`,
     [kind ?? null],
   );
-  return rows.flatMap((row) => {
+  const out: { provider: string; kind: ConnectionKind; credential: string }[] = [];
+  for (const row of rows) {
     const credential = sealer.open(row.sealed_credential);
-    return credential === null ? [] : [{ provider: row.provider, kind: row.kind, credential }];
-  });
+    if (credential === null) continue;
+    const expiring = decodeExpiring(credential);
+    if (!expiring) {
+      out.push({ provider: row.provider, kind: row.kind, credential });
+      continue;
+    }
+    const access = await renewed(client, sealer, row.id, row.provider, now);
+    if (access) out.push({ provider: row.provider, kind: row.kind, credential: access });
+  }
+  return out;
+}
+
+/**
+ * The access token of an expiring credential, renewed when it ends soon (D-032). The row is locked
+ * while renewing: the refresh token turns at each use, so two renewals at once would lose it. A
+ * refused renewal marks the connection expired: the person signs in again.
+ */
+async function renewed(
+  client: Client,
+  sealer: Sealer,
+  id: string,
+  provider: string,
+  now: () => number,
+): Promise<string | null> {
+  const locked = await client.query<{ sealed_credential: string }>(
+    "SELECT sealed_credential FROM connections WHERE id = $1 AND status = 'active' FOR UPDATE",
+    [id],
+  );
+  const current =
+    locked.rows[0] && decodeExpiring(sealer.open(locked.rows[0].sealed_credential) ?? '');
+  if (!current) return null;
+  if (current.expiresAt - now() > RENEW_BEFORE_MS) return current.access;
+  const refresher = refresherOf(provider);
+  if (!refresher) return current.expiresAt > now() ? current.access : null;
+  try {
+    const next = await refresher(current.refresh);
+    await client.query('UPDATE connections SET sealed_credential = $2 WHERE id = $1', [
+      id,
+      sealer.seal(encodeExpiring(next)),
+    ]);
+    return next.access;
+  } catch {
+    if (current.expiresAt > now()) return current.access;
+    await client.query("UPDATE connections SET status = 'expired' WHERE id = $1", [id]);
+    return null;
+  }
 }
 
 const connectBody = z.object({

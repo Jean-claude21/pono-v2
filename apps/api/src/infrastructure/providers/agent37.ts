@@ -88,7 +88,16 @@ export function agent37Host(options: {
   apiKey: string;
   fetch: Fetch;
   region?: 'us' | 'eu';
+  /**
+   * Pono's own server template (D-034), for the projects that do not ask for another agent: pnpm,
+   * Spec Kit, a Postgres client and a browser already there.
+   */
+  ponoTemplate?: string;
 }): ProjectServerHost {
+  const templateOf = (agent: Agent) =>
+    options.ponoTemplate && (agent === 'claude-code' || agent === 'none')
+      ? options.ponoTemplate
+      : TEMPLATES[agent];
   const headers = { authorization: `Bearer ${options.apiKey}` };
   const call = <T>(path: string, method = 'GET', body?: unknown, timeoutMs?: number) =>
     fetchJson<T>(options.fetch, {
@@ -104,7 +113,7 @@ export function agent37Host(options: {
     id: ID,
     async create(input: CreateServer) {
       const answer = await call<InstanceAnswer>('/instances', 'POST', {
-        template: TEMPLATES[input.agent],
+        template: templateOf(input.agent),
         resources: RESOURCES,
         region: options.region ?? 'us',
         name: input.name.slice(0, 64),

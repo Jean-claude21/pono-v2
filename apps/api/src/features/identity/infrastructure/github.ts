@@ -1,9 +1,52 @@
 import { fetchJson, type Fetch } from '../../../platform/http.js';
+import { encodeExpiring, type Refresher } from '../../connections/refresh.js';
 import type { IdentityProvider, SignedInPerson } from '../ports.js';
 
 interface TokenAnswer {
   access_token?: string;
+  /** Present when the GitHub App's user tokens expire (8 h), with a refresh token (6 months). */
+  refresh_token?: string;
+  expires_in?: number;
   error?: string;
+}
+
+/** The token to seal: an expiring pair when GitHub gave one (D-032), the bare token otherwise. */
+function credentialOf(token: TokenAnswer, now: number): string {
+  return token.refresh_token && token.expires_in
+    ? encodeExpiring({
+        access: token.access_token!,
+        refresh: token.refresh_token,
+        expiresAt: now + token.expires_in * 1000,
+      })
+    : token.access_token!;
+}
+
+/** Renews a GitHub App user token with its refresh token; the refresh token turns too. */
+export function githubRefresher(options: {
+  clientId: string;
+  clientSecret: string;
+  fetch: Fetch;
+}): Refresher {
+  return async (refreshToken) => {
+    const token = await fetchJson<TokenAnswer>(options.fetch, {
+      provider: 'github',
+      url: 'https://github.com/login/oauth/access_token',
+      method: 'POST',
+      body: {
+        client_id: options.clientId,
+        client_secret: options.clientSecret,
+        grant_type: 'refresh_token',
+        refresh_token: refreshToken,
+      },
+    });
+    if (!token.access_token || !token.refresh_token || !token.expires_in)
+      throw new Error(`Refresh refused: ${token.error ?? 'no token'}`);
+    return {
+      access: token.access_token,
+      refresh: token.refresh_token,
+      expiresAt: Date.now() + token.expires_in * 1000,
+    };
+  };
 }
 interface UserAnswer {
   id: number;
@@ -69,7 +112,7 @@ export function githubIdentity(options: {
         login: user.login,
         name: user.name,
         email,
-        codeHostToken: token.access_token,
+        codeHostToken: credentialOf(token, Date.now()),
       };
     },
   };

@@ -196,6 +196,9 @@ export interface World {
   links: Map<string, 'up' | 'down'>;
   /** Credentials the adapters were called with: never anything else than the sealed one, opened. */
   seen: string[];
+  /** Keys and hooks a hosting was given on repositories (D-037). */
+  keys: string[];
+  hooks: string[];
   /** Server safety (D-031): network policies applied, ports closed, restore points, restores. */
   network: Map<string, NetworkPolicy>;
   unpublished: string[];
@@ -224,6 +227,8 @@ export function world(): World {
     databases: new Map(),
     links: new Map(),
     seen: [],
+    keys: [],
+    hooks: [],
     network: new Map(),
     unpublished: [],
     backups: new Map(),
@@ -266,6 +271,15 @@ export function fakeAdapters(w: World): AppDeps['adapters'] {
         url: `https://code.test/${fullName}.git`,
         header: `AUTHORIZATION: basic ${Buffer.from(credential).toString('base64')}`,
       };
+    },
+    sshUrl: (fullName: string) => `git@code.test:${fullName}.git`,
+    async grantReadKey(credential, fullName, _title, publicKey) {
+      w.seen.push(credential);
+      if (fullName.includes('locked')) throw new ProviderError('code', 403, 'Answered 403');
+      w.keys.push(`${fullName}:${publicKey}`);
+    },
+    async addPushHook(_c, fullName, url) {
+      w.hooks.push(`${fullName}:${url}`);
     },
     async markAsTemplate(_c, fullName) {
       w.templates.add(fullName);
@@ -319,6 +333,35 @@ export function fakeAdapters(w: World): AppDeps['adapters'] {
     },
     async rollback(_credential, ref) {
       w.rollbacks.push(ref);
+    },
+    async newDeployKey() {
+      return { id: `key${w.keys.length + 1}`, publicKey: `ssh-ed25519 PUB${w.keys.length + 1}` };
+    },
+    async createSite(_credential, input) {
+      if ([...w.sites.values()].some((s) => s.ref === input.name))
+        throw new ProviderError('host', 422, 'name taken');
+      const ref = input.name;
+      const repository = input.gitUrl.replace(/^git@code\.test:|\.git$/g, '');
+      const created = {
+        ref,
+        productionUrl: `https://${input.name}.host.test`,
+        productionBranch: input.branch,
+        updatedAt: null,
+      };
+      w.sites.set(ref, { ...created, repository });
+      return { site: created, pushHookUrl: `https://host.test/hooks/${ref}` };
+    },
+    async startBuild(_credential, ref) {
+      w.deployments.set(ref, [
+        {
+          externalId: `${ref}-1`,
+          environment: 'production',
+          status: 'building',
+          url: null,
+          commitSha: null,
+          createdAt: new Date(),
+        },
+      ]);
     },
   };
   const database: Database = {

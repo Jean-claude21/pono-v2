@@ -1,6 +1,6 @@
 # Roadmap — Pono
 
-- **Statut** : `in progress` · **Version** : `1` · **Validée** : en attente de l'auteur
+- **Statut** : `v1` · **Version** : `1` · **Validée** : en attente de l'auteur
 - **Axe** : dépendances et preuves, jamais des dates.
 - **Règle** : une phase se ferme sur sa preuve écrite dans `docs/VERITE_ET_PREUVES.md`.
 
@@ -166,6 +166,38 @@ quel.
 > heure) et le domaine (webhook enregistré, preview sous le domaine de Pono).
 
 **Preuve.** Une modification sur le serveur recharge la preview ; une poussée faite ailleurs la suit.
+
+## Phases 16 à 23 — En ligne, depuis n'importe quel chat, jusqu'à la v1
+
+> **Livrées et déployées sur `pono.kete.digital` le 2026-11-14.**
+
+| Phase | Spec                | Ce qui est prouvé                                                                                                                                                                  |
+| ----- | ------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 16    | `019-deploy`        | une image, une adresse ; Coolify, Neon, Resend, Umami en ligne (D-024)                                                                                                             |
+| 17    | `020-chat-coding`   | coder depuis Claude.ai ou ChatGPT, par MCP seul, sur le serveur (D-027)                                                                                                            |
+| 18    | `021-workbench`     | atelier aligné sur les agents open source, skills Agent Skills (D-028)                                                                                                             |
+| 19    | —                   | services reliés par connexion, l'agent dit ce qui manque (D-029)                                                                                                                   |
+| 20    | —                   | profit de l'hébergeur : preview lisible, santé, recharge (D-030)                                                                                                                   |
+| 21    | `022-server-safety` | preview privée, réseau limité, sauvegardes (D-031)                                                                                                                                 |
+| 22    | `023-v1`            | jetons GitHub renouvelés (D-032), catalogue par catégories (D-033), gabarit `pono-web` (D-034), skills épinglées (D-035), dépôts de départ (D-036), mise en ligne par Pono (D-037) |
+
+**Preuve de la phase 6 tenue** : un template a mené un vrai projet en production
+(`scripts/template-live.ts`).
+
+### Restent, gestes de l'auteur
+
+- Application GitHub : ajouter les permissions « Administration » et « Webhooks », puis accepter la
+  mise à jour sur les deux installations.
+- Moneroo : déclarer le webhook `https://pono.kete.digital/billing/webhook` ; activer XOF en sandbox
+  pour les boutiques.
+- Relier Claude.ai à `https://pono.kete.digital/mcp` (preuve OAuth en ligne).
+- Recharger le portefeuille Agent37.
+- Application OAuth Netlify (connexion en un clic au lieu d'une clé).
+
+### Après la v1
+
+L'agent qui tourne sur le serveur (Pono paie l'IA), la copie d'un serveur pour essayer sans risque,
+une galerie ouverte aux créateurs.
 
 ---
 

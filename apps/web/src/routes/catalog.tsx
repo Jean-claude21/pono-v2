@@ -25,6 +25,9 @@ interface Template {
   stack: string[];
   skills: string[];
   scope?: string;
+  parent?: string;
+  needs?: string[];
+  value?: { launched: number; live: number; minutesToPreview: number | null };
 }
 
 interface Launched {
@@ -41,7 +44,9 @@ type Tab = 'templates' | 'skills' | 'mine';
  * own in a third. Choosing a template opens its launch form at the top.
  */
 function Catalog() {
-  const templates = useApi<{ templates: Template[] }>('/v1/catalog/templates');
+  const templates = useApi<{ categories?: string[]; templates: Template[] }>(
+    '/v1/catalog/templates',
+  );
   const skills = useApi<{ skills: SkillCard[] }>('/v1/catalog/skills');
   const [chosen, setChosen] = useState<Template | null>(null);
   const [tab, setTab] = useState<Tab>('templates');
@@ -49,7 +54,16 @@ function Catalog() {
   const locale = getLocale() === 'en' ? 'en' : 'fr';
   const allTemplates = templates.result?.ok ? templates.result.data.templates : [];
   const allSkills = skills.result?.ok ? skills.result.data.skills : [];
-  const categories = [...new Set(allTemplates.map((t) => t.category))];
+  const order = templates.result?.ok ? (templates.result.data.categories ?? []) : [];
+  const present = new Set(allTemplates.map((t) => t.category));
+  const categories = [
+    ...order.filter((c) => present.has(c)),
+    ...[...present].filter((c) => !order.includes(c)),
+  ];
+  // A variant shows inside its template's card; one whose template is gone stands alone (D-033).
+  const ids = new Set(allTemplates.map((t) => t.id));
+  const variantsOf = (id: string) => allTemplates.filter((t) => t.parent === id);
+  const cards = allTemplates.filter((t) => !t.parent || !ids.has(t.parent));
   const families = [...new Set(allSkills.map((s) => s.family))];
   const own = allSkills.filter((s) => ['private', 'proposed', 'refused'].includes(s.scope));
   const tabs: readonly (readonly [Tab, string, number])[] = [
@@ -98,7 +112,7 @@ function Catalog() {
             <span className="tiny mute">{m.catalog_templates_body()}</span>
           </div>
           <div className="grid-cards">
-            {allTemplates
+            {cards
               .filter((t) => category === 'all' || t.category === category)
               .map((t) => (
                 <section className="card" key={t.id}>
@@ -117,9 +131,40 @@ function Catalog() {
                       </span>
                     ))}
                   </div>
+                  {(t.needs?.length ?? 0) > 0 && (
+                    <p className="tiny mute mt-sm">
+                      {m.catalog_needs({
+                        list: t.needs!.map((n) => label('templateNeed', n)).join(', '),
+                      })}
+                    </p>
+                  )}
+                  {variantsOf(t.id).length > 0 && (
+                    <div className="mt-md">
+                      <span className="tiny mute">{m.catalog_variants()}</span>
+                      <div className="row mt-sm" style={{ gap: 6, flexWrap: 'wrap' }}>
+                        {variantsOf(t.id).map((v) => (
+                          <button
+                            type="button"
+                            key={v.id}
+                            className="btn btn-ghost btn-xs"
+                            title={v.description[locale]}
+                            onClick={() => pick(v)}
+                          >
+                            {v.name[locale]}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
                   <div className="tile-foot mt-md">
                     <span className="tiny mute">
                       {m.catalog_skills_count({ count: String(t.skills.length) })}
+                      {t.value && t.value.launched > 0
+                        ? ` · ${m.catalog_value({
+                            launched: String(t.value.launched),
+                            live: String(t.value.live),
+                          })}`
+                        : ''}
                     </span>
                     <button
                       type="button"

@@ -11,3 +11,8 @@ apps/web/project.inlang/cache/
 apps/web/project.inlang/.meta.json
 apps/web/project.inlang/README.md
 design/
+
+# Third-party skills, kept as published at their pinned commit (D-035)
+apps/api/catalog/skills/frontend-design/
+apps/api/catalog/skills/webapp-testing/
+apps/api/catalog/skills/supabase-postgres-best-practices/

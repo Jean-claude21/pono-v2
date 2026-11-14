@@ -13,6 +13,7 @@ import {
   proposeSharing,
   renderSkillFile,
   skillInput,
+  templateGallery,
   type Catalog,
 } from '../catalog/index.js';
 import { launchProject, type LaunchDeps } from '../launch/index.js';
@@ -33,7 +34,7 @@ import { checkSecrets, listVariables, requestVariable, variableName } from '../v
 import { activeCredentials, type Connectable } from '../connections/index.js';
 import { LEVEL_GUIDANCE, LEVELS, levelOf, setLevel } from '../identity/index.js';
 import { manifestView, proposeSkills } from '../manifest/index.js';
-import { importProject, refreshProject } from '../projects/application.js';
+import { importProject, putOnline, refreshProject } from '../projects/application.js';
 import { evaluateReleases, listReleases, requestRollback } from '../releases/index.js';
 import {
   backupServer,
@@ -431,6 +432,17 @@ function buildServer(deps: McpDeps, actor: Actor, scope: 'read' | 'act'): McpSer
   };
 
   server.registerTool(
+    'put_online',
+    {
+      description:
+        "Creates the project's production site at the connected hosting (Netlify), linked to its repository: it builds now, then on every merge to the default branch. Call what_is_missing with goal publish first. Production still changes only through proposals, under the project's release rule. Give the person the production address.",
+      inputSchema: project,
+      annotations: act,
+    },
+    async ({ projectId }) => acting(() => putOnline(deps, actor, projectId)),
+  );
+
+  server.registerTool(
     'share_preview',
     {
       description:
@@ -801,17 +813,21 @@ function buildServer(deps: McpDeps, actor: Actor, scope: 'read' | 'act'): McpSer
     'list_templates',
     {
       description:
-        "The templates a project can start from: Pono's, the operator's, the shared ones and the organization's own.",
+        'The templates a project can start from, by category (presence, commerce, services, tools, software, free); a variant (parent set) is made for a narrower case. Each says what it will ask to connect (needs) and what it brought so far (value: launched, live). Suggest the variant closest to what the person described.',
       annotations: read,
     },
     async () =>
       guard(async () =>
-        (await catalog()).templates.map((t) => ({
+        (await templateGallery(deps.pool, (await catalog()).templates)).map((t) => ({
           id: t.id,
+          category: t.category,
+          ...(t.parent ? { parent: t.parent } : {}),
           name: t.name,
           description: t.description,
           stack: t.stack,
           skills: t.skills,
+          needs: t.needs ?? [],
+          value: t.value,
           scope: t.scope,
         })),
       ),

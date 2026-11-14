@@ -53,6 +53,7 @@ const tables: Record<string, Record<string, () => string>> = {
     services: m.category_services,
     commerce: m.category_commerce,
     software: m.category_software,
+    tools: m.category_tools,
     presence: m.category_presence,
   },
   serverStatus: {
@@ -132,6 +133,7 @@ const tables: Record<string, Record<string, () => string>> = {
     'server.restore_started': m.action_server_restore_started,
     'server.restored': m.action_server_restored,
     'server.restore_failed': m.action_server_restore_failed,
+    'project.site_created': m.action_project_site_created,
     'variable.set': m.action_variable_set,
     'variable.removed': m.action_variable_removed,
     'variable.requested': m.action_variable_requested,
@@ -210,6 +212,13 @@ const tables: Record<string, Record<string, () => string>> = {
     'servers.compute': m.meter_servers_compute,
     account: m.meter_account,
   },
+  templateNeed: {
+    hosting: m.tneed_hosting,
+    database: m.tneed_database,
+    analytics: m.tneed_analytics,
+    payments: m.tneed_payments,
+    emails: m.tneed_emails,
+  },
   error: {
     'dev.no_server': m.error_dev_no_server,
     'dev.server_asleep': m.error_dev_server_asleep,
@@ -222,6 +231,8 @@ const tables: Record<string, Record<string, () => string>> = {
     'server.cold': m.error_server_cold,
     'server.restoring': m.error_server_restoring,
     'server.no_backup': m.error_server_no_backup,
+    'code_host.permission_missing': m.error_code_host_permission_missing,
+    'hosting.name_taken': m.error_hosting_name_taken,
     'variables.person_only': m.error_variables_person_only,
     'variable.invalid_name': m.error_variable_invalid_name,
     'oauth.unknown_client': m.error_oauth_unknown_client,

@@ -44,6 +44,7 @@ function deployState(status: string): string {
 function Project({ id, onName }: Readonly<{ id: string; onName: (name: string) => void }>) {
   const detail = useApi<Detail>(`/v1/projects/${id}`);
   const [busy, setBusy] = useState(false);
+  const [onlineNote, setOnlineNote] = useState<string | null>(null);
   const [tab, setTab] = useState<Tab>('overview');
   useEffect(() => {
     const hash = window.location.hash.slice(1);
@@ -63,6 +64,25 @@ function Project({ id, onName }: Readonly<{ id: string; onName: (name: string) =
     setBusy(true);
     await api(`/v1/projects/${id}/refresh`, { method: 'POST' });
     setBusy(false);
+    detail.reload();
+  };
+  // The site at the connected hosting, linked to the repository (D-037).
+  const putOnline = async () => {
+    setBusy(true);
+    setOnlineNote(null);
+    const result = await api<{ productionUrl: string | null }>(`/v1/projects/${id}/online`, {
+      method: 'POST',
+    });
+    setBusy(false);
+    if (!result.ok) {
+      setOnlineNote(
+        result.error.code === 'release.no_hosting'
+          ? m.project_online_no_hosting()
+          : label('error', result.error.code),
+      );
+      return;
+    }
+    setOnlineNote(m.project_online_done({ url: result.data.productionUrl ?? '—' }));
     detail.reload();
   };
   const show = (next: Tab) => {
@@ -102,6 +122,17 @@ function Project({ id, onName }: Readonly<{ id: string; onName: (name: string) =
             >
               {m.project_refresh()}
             </button>
+            {!project.productionUrl && project.hosting.status !== 'found' && (
+              <button
+                type="button"
+                className="btn btn-primary btn-sm"
+                onClick={putOnline}
+                disabled={busy}
+              >
+                <Icon name="rocket" />
+                {m.project_put_online()}
+              </button>
+            )}
             {project.productionUrl && (
               <a
                 className="btn btn-primary btn-sm"
@@ -116,6 +147,8 @@ function Project({ id, onName }: Readonly<{ id: string; onName: (name: string) =
           </>
         }
       />
+
+      {onlineNote && <p className="notice">{onlineNote}</p>}
 
       {(project.state === 'failing' || project.state === 'warning') && (
         <div className={`verdict${project.state === 'warning' ? ' warning' : ''}`}>

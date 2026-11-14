@@ -95,8 +95,23 @@ export function githubCodeHost(fetchImpl: Fetch): CodeHost & Connectable {
         }
         throw error;
       }
+      // A generated repository fills in a moment: writing before its first commit lands would be
+      // overwritten by the generation. Wait for its default branch (up to about 40 seconds).
+      if (input.starter)
+        for (let attempt = 0; attempt < 20; attempt++) {
+          const ready = await fetchJson(fetchImpl, {
+            provider: ID,
+            url: `${API}/repos/${created.full_name}/branches/${created.default_branch ?? 'main'}`,
+            headers: headers(token),
+          }).then(
+            () => true,
+            () => false,
+          );
+          if (ready) break;
+          await new Promise((r) => setTimeout(r, 2000));
+        }
       for (const [path, content] of Object.entries(input.files)) {
-        // A generated repository fills in a moment: its first write may answer 404 or 409.
+        // Even then, a first write may answer 404 or 409 for a moment.
         for (let attempt = 0; ; attempt++) {
           try {
             let sha: string | undefined;
@@ -156,6 +171,30 @@ export function githubCodeHost(fetchImpl: Fetch): CodeHost & Connectable {
         url: `https://github.com/${fullName}.git`,
         header: `AUTHORIZATION: basic ${Buffer.from(`x-access-token:${token}`).toString('base64')}`,
       };
+    },
+    sshUrl: (fullName: string) => `git@github.com:${fullName}.git`,
+    async grantReadKey(token, fullName, title, publicKey) {
+      await fetchJson(fetchImpl, {
+        provider: ID,
+        url: `${API}/repos/${fullName}/keys`,
+        method: 'POST',
+        headers: headers(token),
+        body: { title, key: publicKey, read_only: true },
+      });
+    },
+    async addPushHook(token, fullName, url) {
+      await fetchJson(fetchImpl, {
+        provider: ID,
+        url: `${API}/repos/${fullName}/hooks`,
+        method: 'POST',
+        headers: headers(token),
+        body: {
+          name: 'web',
+          active: true,
+          events: ['push'],
+          config: { url, content_type: 'json' },
+        },
+      });
     },
     async markAsTemplate(token, fullName) {
       await fetchJson(fetchImpl, {
