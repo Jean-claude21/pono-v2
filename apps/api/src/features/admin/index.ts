@@ -19,6 +19,8 @@ export interface AdminDeps {
   admins: string[];
   /** The server provider's workspace wallet, when it says it. */
   serverAccount?: () => Promise<{ balanceMicros: number; activeLimit: number } | null>;
+  /** Tops up that wallet: answers the provider's payment page. */
+  walletTopUp?: (amountUsd: number) => Promise<string>;
 }
 
 function onlyAdmins(deps: AdminDeps): MiddlewareHandler<AppEnv> {
@@ -60,6 +62,15 @@ export function adminRoutes(deps: AdminDeps): Hono<AppEnv> {
           (Object.keys(PLANS) as Plan[]).map((p) => [p, orgs.filter((o) => o.plan === p).length]),
         ),
       });
+    })
+    .post('/wallet/top-up', async (c) => {
+      if (!deps.walletTopUp)
+        throw new AppError('admin.no_wallet', 404, 'The server provider has no wallet to top up.');
+      const body = z
+        .object({ amountUsd: z.number().int().min(5).max(10_000) })
+        .safeParse(await c.req.json().catch(() => null));
+      if (!body.success) throw new AppError('request.invalid', 400, 'Between 5 and 10 000 USD.');
+      return c.json({ url: await deps.walletTopUp(body.data.amountUsd) });
     })
     .get('/organizations', async (c) => {
       const { rows } = await deps.pool.query<{
@@ -191,23 +202,37 @@ export function adminRoutes(deps: AdminDeps): Hono<AppEnv> {
       );
       if (!templateFile)
         throw new AppError('catalog.unreadable', 422, 'The repository has no pono-template.yaml.');
-      const names = (
-        await host.listDirectory(credential, repository.fullName, '.pono/skills', ref)
-      ).filter((n) => n.endsWith('.md'));
+      // Skills as the Agent Skills standard keeps them (D-028): a folder per skill with its
+      // SKILL.md and its references, scripts and assets; the first one-file format still reads.
       const skillFiles: string[] = [];
-      for (const n of names) {
-        const content = await host.fileAt(
-          credential,
-          repository.fullName,
-          `.pono/skills/${n}`,
-          ref,
-        );
-        if (content) skillFiles.push(content);
+      const extra = new Map<string, Record<string, string>>();
+      const at = (path: string) => host.fileAt(credential, repository.fullName, path, ref);
+      const list = (path: string) =>
+        host.listDirectory(credential, repository.fullName, path, ref).catch(() => []);
+      for (const root of ['.pono/skills', '.claude/skills', '.agents/skills']) {
+        for (const n of await list(root)) {
+          if (n.endsWith('.md')) {
+            const content = await at(`${root}/${n}`);
+            if (content) skillFiles.push(content);
+            continue;
+          }
+          const main = await at(`${root}/${n}/SKILL.md`);
+          if (!main) continue;
+          skillFiles.push(main);
+          const files: Record<string, string> = {};
+          for (const top of ['references', 'scripts', 'assets'])
+            for (const f of (await list(`${root}/${n}/${top}`)).slice(0, 20)) {
+              const content = await at(`${root}/${n}/${top}/${f}`);
+              if (content !== null && content.length <= 100_000) files[`${top}/${f}`] = content;
+            }
+          if (Object.keys(files).length) extra.set(n, files);
+        }
+        if (skillFiles.length) break;
       }
-      const { template, skills } = readTemplateRepository(
-        repository.fullName,
-        templateFile,
-        skillFiles,
+      const read = readTemplateRepository(repository.fullName, templateFile, skillFiles);
+      const template = read.template;
+      const skills = read.skills.map((s) =>
+        extra.has(s.name) ? { ...s, files: extra.get(s.name) } : s,
       );
       for (const skill of skills)
         await deps.pool.query('SELECT admin_catalog_publish($1, $2, $3)', [

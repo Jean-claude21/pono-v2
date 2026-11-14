@@ -24,6 +24,9 @@ const schema = z.object({
   MONEROO_SECRET_KEY: z.string().min(1).optional(),
   MONEROO_WEBHOOK_SECRET: z.string().min(1).optional(),
   PONO_MONEROO_CURRENCY: z.string().length(3).default('USD'),
+  /** Pono's OAuth application at Netlify (D-029): a click instead of a key. */
+  NETLIFY_OAUTH_CLIENT_ID: z.string().min(1).optional(),
+  NETLIFY_OAUTH_CLIENT_SECRET: z.string().min(1).optional(),
   STRIPE_SECRET_KEY: z.string().min(1).optional(),
   STRIPE_WEBHOOK_SECRET: z.string().min(1).optional(),
   PONO_STRIPE_PRICE_SOLO: z.string().min(1).optional(),

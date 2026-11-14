@@ -156,7 +156,12 @@ describe.skipIf(process.platform === 'win32')('the dev loop commands in a real s
     expect(sh(`git --git-dir="${origin}" show main:message.txt`)).toBe('hello');
 
     sh(stopCommand(repository));
+    // The process group takes a moment to end: wait for it, as a person would.
     state = readStatus(sh(statusCommand(repository, port)));
+    for (let i = 0; i < 25 && (state.alive || state.phase !== 'stopped'); i++) {
+      await new Promise((r) => setTimeout(r, 200));
+      state = readStatus(sh(statusCommand(repository, port)));
+    }
     expect(state).toMatchObject({ phase: 'stopped', alive: false });
     expect(readFileSync(join(dir, '.git', 'info', 'exclude'), 'utf8')).toContain('.pono/');
   }, 30_000);

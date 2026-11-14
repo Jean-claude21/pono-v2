@@ -359,3 +359,46 @@ devient : _code depuis n'importe quel chat, ton agent a un serveur pour chaque p
 
 **Ce que ça coûte.** Un agent de chat convient aux changements courants ; un gros chantier reste
 plus à l'aise dans Claude Code sur une machine. Les deux chemins mènent au même serveur et à `dev`.
+
+## D-028 — L'atelier suit les agents de code open source, et les skills la norme Agent Skills
+
+**Tranché le 2026-11-14**, précise D-027.
+
+Vérifié à la source (OpenHands, SWE-agent, Codex, OpenCode, Goose, Cline, Aider) : la boîte à outils
+du serveur (`toolbox.cjs`) écrit d'un coup (fichier temporaire puis renommage), garde dix retours en
+arrière par fichier (`undo_edit`), refuse une modification qui casse la syntaxe d'un fichier qui se
+lisait (JSON, JavaScript ; leçon mesurée par SWE-agent), retrouve un texte dont les espaces de bord
+diffèrent en le disant, accepte le format `apply_patch` de Codex pour les modèles GPT, donne une
+carte du dépôt (`project_map`, à la manière d'Aider), plafonne les recherches à 100 résultats et
+renvoie les erreurs du serveur de dev après chaque changement.
+
+Les skills suivent la norme ouverte Agent Skills : un dossier par skill, son `SKILL.md` (nom,
+description, puis les instructions) et ses `references/`, `scripts/`, `assets/`. Pono les sert peu à
+peu (`list_skills`, `get_skill`, `get_skill_file`), les installe sur le serveur du projet dans
+`.claude/skills` et `.agents/skills` hors de git, sans écraser celles du dépôt, et lit les dépôts
+de templates qui les rangent ainsi. L'ancien fichier unique se lit encore.
+
+## D-029 — On relie un service en se connectant chez lui ; l'agent dit ce qui manque
+
+**Tranché le 2026-11-14.**
+
+« Services connectés » montre d'abord le chemin d'un projet jusqu'en ligne : code, développement
+(inclus), mise en ligne, données, visites et IA. Là où le fournisseur ouvre une connexion à une
+application tierce (GitHub, Netlify), on clique et on autorise ; ailleurs, le bouton ouvre la page
+du fournisseur où se crée la clé, avec les droits à donner, et Pono trouve seul ce qu'il peut
+(le compte Cloudflare). Avant de publier, d'ajouter une base, de compter les visites ou d'utiliser
+l'IA, l'agent appelle `what_is_missing` ; un refus pour un service absent porte le lien pour le
+relier. L'agent l'explique avec des mots simples et reprend une fois le service relié.
+
+**Ce que ça coûte.** Une connexion par clic demande une application de Pono chez chaque fournisseur,
+créée par l'exploitant ; sans elle, la clé guidée reste.
+
+## D-030 — Pono profite de ce que son hébergeur de serveurs offre déjà
+
+**Tranché le 2026-11-14.**
+
+Lu dans la documentation d'Agent37 : la preview porte le nom du projet (`<projet>-<id>`) ; l'état
+du dev dit si le serveur a manqué de mémoire ou redémarré ; l'exploitant recharge le portefeuille
+depuis l'admin (une page de paiement du fournisseur). Repérés pour la suite : sauvegarde et
+restauration d'un serveur, copie d'un serveur, previews privées signées, gabarits de serveur avec
+les outils déjà installés, et les agents qui tournent sur le serveur lui-même.

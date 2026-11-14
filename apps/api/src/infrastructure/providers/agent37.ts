@@ -124,7 +124,24 @@ export function agent37Host(options: {
         name: 'pono-dev',
       });
     },
-    async publishPort(externalId, port, label) {
+    async health(externalId) {
+      const answer = await call<{
+        health?: {
+          running?: boolean;
+          restart_count?: number;
+          oom_suspected?: boolean;
+          resource_verdict?: string;
+        };
+      }>(`/instances/${externalId}/logs?tail=1`);
+      const h = answer.health ?? {};
+      return {
+        running: h.running ?? null,
+        restarts: h.restart_count ?? 0,
+        outOfMemory: h.oom_suspected ?? false,
+        verdict: h.resource_verdict ?? null,
+      };
+    },
+    async publishPort(externalId, port, label, prefix) {
       const listed = await call<
         { port: number; url: string }[] | { public_ports?: { port: number; url: string }[] }
       >(`/instances/${externalId}/public-ports`);
@@ -134,6 +151,7 @@ export function agent37Host(options: {
       const opened = await call<{ url: string }>(`/instances/${externalId}/public-ports`, 'POST', {
         port,
         label: label.slice(0, 40),
+        ...(prefix ? { prefix } : {}),
       });
       return { url: opened.url };
     },
@@ -163,5 +181,19 @@ export function agent37Account(options: { apiKey: string; fetch: Fetch }) {
       balanceMicros: Math.round(billing.balance_usd * 1_000_000),
       activeLimit: billing.instance_limit,
     };
+  };
+}
+
+/** A top-up of the workspace wallet: the provider answers a payment page (POST /v1/billing/top-up). */
+export function agent37TopUp(options: { apiKey: string; fetch: Fetch }) {
+  return async (amountUsd: number): Promise<string> => {
+    const answer = await fetchJson<{ url: string }>(options.fetch, {
+      provider: ID,
+      url: `${API}/billing/top-up`,
+      method: 'POST',
+      headers: { authorization: `Bearer ${options.apiKey}` },
+      body: { amount_usd: amountUsd },
+    });
+    return answer.url;
   };
 }

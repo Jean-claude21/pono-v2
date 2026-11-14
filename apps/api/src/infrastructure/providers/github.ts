@@ -41,6 +41,8 @@ export function githubCodeHost(fetchImpl: Fetch): CodeHost & Connectable {
     id: ID,
     kind: 'code_host',
     fields: ['token'],
+    keyUrl: 'https://github.com/settings/tokens?type=beta',
+    keyScopes: 'Contents and Pull requests: read and write; Metadata: read',
     async verify(fields) {
       const token = fields.token!;
       const user = await fetchJson<{ login: string }>(fetchImpl, {

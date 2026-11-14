@@ -25,7 +25,9 @@ import {
 } from './domain.js';
 import {
   codeCommand,
+  devProblems,
   jobCommand,
+  WRITING_OPS,
   LIMITS,
   readCode,
   readRun,
@@ -130,6 +132,8 @@ async function journal(
 export interface DevView extends DevState {
   previewUrl: string | null;
   port: number | null;
+  /** The server's own health, when its host says it: a dev server killed by memory shows here. */
+  server?: { restarts: number; outOfMemory: boolean; verdict: string | null } | undefined;
 }
 
 /**
@@ -184,7 +188,20 @@ export async function startDev(
     t.externalId,
     startCommand({ repository: t.repository, plan, hostSuffix: deps.serverHost.publicHostSuffix }),
   );
-  const { url } = await deps.serverHost.publishPort(t.externalId, plan.port, 'preview');
+  const prefix = t.repository
+    .split('/')
+    .pop()!
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .slice(0, 30)
+    .replace(/-+$/, '');
+  const { url } = await deps.serverHost.publishPort(
+    t.externalId,
+    plan.port,
+    'preview',
+    prefix || undefined,
+  );
   await withOrganization(deps.pool, actor.organizationId, (client) =>
     client.query(
       'UPDATE project_servers SET dev_port = $2, dev_command = $3, preview_url = $4, dev_started_at = now() WHERE id = $1',
@@ -220,11 +237,21 @@ export async function devStatus(
     statusCommand(t.repository, t.devPort, lines),
   );
   const state = readStatus(out.stdout);
+  const health = await deps.serverHost.health?.(t.externalId).catch(() => null);
   return {
     ...state,
     logs: redact(state.logs, t.values),
     previewUrl: t.previewUrl,
     port: t.devPort,
+    ...(health
+      ? {
+          server: {
+            restarts: health.restarts,
+            outOfMemory: health.outOfMemory,
+            verdict: health.verdict,
+          },
+        }
+      : {}),
   };
 }
 
@@ -315,8 +342,6 @@ function pathOf(path: string): string {
   return clean;
 }
 
-const WRITES = new Set(['edit', 'write', 'move', 'delete']);
-
 /**
  * One file operation in the project's repository on its server (D-027): read, list, search, edit,
  * write, move, delete, or the changes so far. Writes are journaled with their paths; nothing that
@@ -331,12 +356,16 @@ export async function codeOn(
   const op: CodeOp =
     'path' in input && input.path !== null ? { ...input, path: pathOf(input.path) } : input;
   if (op.op === 'move') op.to = pathOf(op.to);
-  if (op.op === 'write' && op.content.length > LIMITS.writeChars)
+  if (
+    (op.op === 'write' && op.content.length > LIMITS.writeChars) ||
+    (op.op === 'patch' && op.patch.length > LIMITS.writeChars)
+  )
     throw new AppError('code.too_large', 413, 'Write large files in several smaller parts.');
   const t = await target(deps, actor, projectId);
   const out = await deps.serverHost.run(t.externalId, codeCommand(t.repository, op), {
     timeoutMs: 60_000,
   });
+  const problems = redact(devProblems(out.stdout).join('\n'), t.values);
   const answer = readCode(out.stdout);
   if (answer.error === 'not_ready')
     throw new AppError(
@@ -348,12 +377,17 @@ export async function codeOn(
     throw new AppError('code.server_failed', 502, 'The server did not answer.', {
       output: redact(out.stderr, t.values).slice(-1500),
     });
-  if (!answer.error && WRITES.has(op.op) && !(op.op === 'edit' && op.dryRun))
+  const wrote = !answer.error && WRITING_OPS.has(op.op) && !(op.op === 'edit' && op.dryRun);
+  if (wrote)
     await journal(deps, actor, projectId, `code.${op.op}`, {
       path: 'path' in op ? op.path : null,
       ...(op.op === 'move' ? { to: op.to } : {}),
+      ...(op.op === 'patch' && Array.isArray(answer.applied)
+        ? { files: (answer.applied as { path: string }[]).map((a) => a.path).slice(0, 50) }
+        : {}),
     });
-  return JSON.parse(redact(JSON.stringify(answer), t.values)) as Record<string, unknown>;
+  const safe = JSON.parse(redact(JSON.stringify(answer), t.values)) as Record<string, unknown>;
+  return wrote && problems ? { ...safe, devServer: problems.split('\n') } : safe;
 }
 
 /**
