@@ -81,6 +81,9 @@ export function fakeServerHost(w: World): ProjectServerHost {
     async wake(id) {
       w.servers.get(id)!.status = 'running';
     },
+    async monthSpend() {
+      return new Map(w.spend);
+    },
     async destroy(id) {
       w.servers.delete(id);
     },
@@ -175,6 +178,8 @@ export interface World {
   proposals: Map<string, Proposal[]>;
   /** Pushed branches: `fullName@branch` → head, for proposals opened from them (D-039). */
   branchHeads: Map<string, string>;
+  /** What each server spent this month at the host, by external id (D-040). */
+  spend: Map<string, number>;
   proposalFiles: Map<string, ChangedFile[]>;
   statuses: { fullName: string; sha: string; state: string }[];
   merged: string[];
@@ -217,6 +222,7 @@ export function world(): World {
     usage: [],
     proposals: new Map(),
     branchHeads: new Map(),
+    spend: new Map(),
     previewBranches: new Map(),
     branchBuilds: [],
     proposalFiles: new Map(),
