@@ -173,6 +173,8 @@ export function fakeAnalytics(w: World): SiteAnalytics {
 
 export interface World {
   proposals: Map<string, Proposal[]>;
+  /** Pushed branches: `fullName@branch` → head, for proposals opened from them (D-039). */
+  branchHeads: Map<string, string>;
   proposalFiles: Map<string, ChangedFile[]>;
   statuses: { fullName: string; sha: string; state: string }[];
   merged: string[];
@@ -199,6 +201,10 @@ export interface World {
   /** Keys and hooks a hosting was given on repositories (D-037). */
   keys: string[];
   hooks: string[];
+  /** Branches a created site also builds as previews: site ref → branches (D-039). */
+  previewBranches: Map<string, string[]>;
+  /** Branches a hosting was asked to build as previews: `ref@branch`. */
+  branchBuilds: string[];
   /** Server safety (D-031): network policies applied, ports closed, restore points, restores. */
   network: Map<string, NetworkPolicy>;
   unpublished: string[];
@@ -210,6 +216,9 @@ export function world(): World {
   return {
     usage: [],
     proposals: new Map(),
+    branchHeads: new Map(),
+    previewBranches: new Map(),
+    branchBuilds: [],
     proposalFiles: new Map(),
     statuses: [],
     merged: [],
@@ -298,6 +307,22 @@ export function fakeAdapters(w: World): AppDeps['adapters'] {
       w.opened.set(fullName, { branch: input.branch, title: input.title, files: input.files });
       return { number: 99, url: `https://code.test/${fullName}/pull/99` };
     },
+    async openProposal(_c, fullName, input) {
+      const open = w.proposals.get(fullName) ?? [];
+      const known = open.find((x) => x.branch === input.branch);
+      if (known) return { number: known.number, url: known.url };
+      const head = w.branchHeads.get(`${fullName}@${input.branch}`);
+      if (!head) return null;
+      const proposal = {
+        number: 100 + open.length,
+        title: input.title,
+        headSha: head,
+        branch: input.branch,
+        url: `https://code.test/${fullName}/pull/${100 + open.length}`,
+      };
+      w.proposals.set(fullName, [...open, proposal]);
+      return { number: proposal.number, url: proposal.url };
+    },
     async setReleaseStatus(_c, fullName, sha, state) {
       w.statuses.push({ fullName, sha, state });
     },
@@ -349,7 +374,11 @@ export function fakeAdapters(w: World): AppDeps['adapters'] {
         updatedAt: null,
       };
       w.sites.set(ref, { ...created, repository });
+      w.previewBranches.set(ref, input.previewBranches);
       return { site: created, pushHookUrl: `https://host.test/hooks/${ref}` };
+    },
+    async buildBranch(_credential, ref, branch) {
+      w.branchBuilds.push(`${ref}@${branch}`);
     },
     async startBuild(_credential, ref) {
       w.deployments.set(ref, [

@@ -161,6 +161,7 @@ const tables: Record<string, Record<string, () => string>> = {
     'server.released': m.action_server_released,
     'project.launched': m.action_project_launched,
     'release.evaluated': m.action_release_evaluated,
+    'release.proposed': m.action_release_proposed,
     'release.refused': m.action_release_refused,
     'release.approved': m.action_release_approved,
     'release.auto_merged': m.action_release_auto_merged,

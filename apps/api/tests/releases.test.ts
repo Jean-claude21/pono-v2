@@ -1,6 +1,11 @@
 import { randomUUID } from 'node:crypto';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { approveRelease, setReleaseMode } from '../src/features/releases/index.js';
+import {
+  approveRelease,
+  evaluateReleases,
+  proposeFromDev,
+  setReleaseMode,
+} from '../src/features/releases/index.js';
 import type { ChangedFile } from '../src/features/releases/guards.js';
 import { call, signIn, testApp, type TestApp } from './support/app.js';
 
@@ -267,5 +272,56 @@ describe('guarded releases (phase 5)', () => {
     expect(detail.journal.map((j: { action: string }) => j.action)).toEqual(
       expect.arrayContaining(['release.protected', 'release.rolled_back']),
     );
+  });
+});
+
+describe('a chat agent proposes dev for production (D-039)', () => {
+  it('opens the proposal from dev once, answers it again after, and has nothing to open when dev is level', async () => {
+    const s = await setup([additive]);
+    t.world.proposals.set(s.fullName, []);
+    expect(await proposeFromDev(t.deps, s.actor, s.id)).toBeNull();
+
+    t.world.branchHeads.set(`${s.fullName}@dev`, s.sha);
+    const first = await proposeFromDev(t.deps, s.actor, s.id);
+    expect(first?.url).toContain(s.fullName);
+    const again = await proposeFromDev(t.deps, s.actor, s.id);
+    expect(again?.number).toBe(first?.number);
+    expect(t.world.proposals.get(s.fullName)).toHaveLength(1);
+
+    const releases = await evaluateReleases(t.deps, s.actor, s.id);
+    expect(releases.map((r) => r.number)).toContain(first?.number);
+    const detail = await (await call(t, s.cookie, `/v1/projects/${s.id}`)).json();
+    expect(detail.journal.map((j: { action: string }) => j.action)).toContain('release.proposed');
+  });
+});
+
+describe('a preview still building (D-039)', () => {
+  it('refuses for now, then evaluates the same head again once the preview is built', async () => {
+    const s = await setup([additive], { preview: false });
+    const site = [...t.world.sites.values()].find((x) => x.repository === s.fullName)!;
+    const preview = (status: 'building' | 'succeeded') => [
+      {
+        externalId: `p-${s.sha}`,
+        environment: 'preview' as const,
+        status,
+        url: null,
+        commitSha: s.sha,
+        createdAt: new Date(),
+      },
+    ];
+    t.world.deployments.set(site.ref, preview('building'));
+    const first = await evaluateReleases(t.deps, s.actor, s.id);
+    expect(first.find((r) => r.number === 7)?.status).toBe('refused');
+
+    t.world.deployments.set(site.ref, preview('succeeded'));
+    const second = await evaluateReleases(t.deps, s.actor, s.id);
+    expect(second.find((r) => r.number === 7)?.status).toBe('waiting');
+    // Evaluated once more, then left alone: a head that passed is not read again.
+    await evaluateReleases(t.deps, s.actor, s.id);
+    const detail = await (await call(t, s.cookie, `/v1/projects/${s.id}`)).json();
+    const evaluations = detail.journal.filter((j: { action: string }) =>
+      ['release.refused', 'release.evaluated'].includes(j.action),
+    );
+    expect(evaluations).toHaveLength(2);
   });
 });

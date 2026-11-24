@@ -14,6 +14,7 @@ import {
   previewGuard,
   secretsGuard,
   verdict,
+  waitedForPreview,
   type GuardResult,
   type ReleaseMode,
 } from './guards.js';
@@ -123,6 +124,41 @@ async function tools(
 }
 
 /**
+ * Opens the proposal `dev` → the production branch, or finds the one open (D-039): an agent in a
+ * chat pushes to `dev` through Pono and has no other way to propose it. Null when `dev` holds
+ * nothing production lacks. Pono only proposes; what ships stays the release rule's.
+ */
+export async function proposeFromDev(
+  deps: ProjectsDeps,
+  actor: Actor,
+  projectId: string,
+): Promise<{ number: number; url: string } | null> {
+  const p = await withOrganization(deps.pool, actor.organizationId, (client) =>
+    project(client, projectId),
+  );
+  const { host, code } = await tools(deps, actor, p);
+  if (!host.openProposal || p.default_branch === 'dev') return null;
+  const opened = await host.openProposal(code, p.repository, {
+    base: p.default_branch,
+    branch: 'dev',
+    title: 'Release dev',
+    body: "Proposed by Pono from the dev branch. What ships follows the project's release rule.",
+  });
+  if (opened)
+    await withOrganization(deps.pool, actor.organizationId, (client) =>
+      record(client, {
+        organizationId: actor.organizationId,
+        projectId: p.id,
+        action: 'release.proposed',
+        actorPerson: actor.personId,
+        channel: actor.channel,
+        detail: { number: opened.number },
+      }),
+    );
+  return opened;
+}
+
+/**
  * Reads the open proposals, evaluates every new head, publishes `pono/release`, and ships what the
  * mode lets ship (D-006). A proposal already evaluated at the same head is not evaluated twice.
  */
@@ -144,12 +180,13 @@ export async function evaluateReleases(
 
   for (const proposal of proposals) {
     const known = await withOrganization(deps.pool, actor.organizationId, (client) =>
-      client.query(
-        'SELECT 1 FROM releases WHERE project_id = $1 AND number = $2 AND head_sha = $3',
+      client.query<{ verdict: string; guards: GuardResult[] }>(
+        'SELECT verdict, guards FROM releases WHERE project_id = $1 AND number = $2 AND head_sha = $3 ORDER BY created_at DESC LIMIT 1',
         [p.id, proposal.number, proposal.headSha],
       ),
     );
-    if (known.rowCount) continue;
+    // A head refused only because its preview was not built yet is read again (D-039).
+    if (known.rows[0] && !waitedForPreview(known.rows[0])) continue;
     const files = await host.proposalFiles(code, p.repository, proposal.number);
     const manifest = await host
       .fileAt(code, p.repository, 'pono.yaml', proposal.headSha)
@@ -172,7 +209,11 @@ export async function evaluateReleases(
       );
       const { rows } = await client.query<{ id: string }>(
         `INSERT INTO releases (organization_id, project_id, number, title, head_sha, branch, url, mode, verdict, guards, status)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11) RETURNING id`,
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+         ON CONFLICT (project_id, number, head_sha) DO UPDATE
+           SET mode = EXCLUDED.mode, verdict = EXCLUDED.verdict, guards = EXCLUDED.guards,
+               status = EXCLUDED.status, created_at = now()
+         RETURNING id`,
         [
           actor.organizationId,
           p.id,
@@ -537,55 +578,62 @@ export function releaseRoutes(deps: ProjectsDeps): Hono<AppEnv> {
     mode: z.enum(['ask', 'auto', 'bypass']),
     hours: z.number().int().min(1).max(720).nullish(),
   });
-  return new Hono<AppEnv>()
-    .get('/projects/:id/releases', async (c) => {
-      const releases = await listReleases(deps, c.var.actor, c.req.param('id'));
-      const p = await withOrganization(deps.pool, c.var.actor.organizationId, (client) =>
-        client.query<{
-          release_mode: ReleaseMode;
-          release_mode_until: Date | null;
-          production_protection: string;
-        }>(
-          'SELECT release_mode, release_mode_until, production_protection FROM projects WHERE id = $1',
-          [c.req.param('id')],
-        ),
-      );
-      const row = p.rows[0]!;
-      return c.json({
-        mode: modeInForce(row, deps.now()),
-        modeUntil: row.release_mode_until?.toISOString() ?? null,
-        protection: row.production_protection,
-        releases,
-      });
-    })
-    .post('/projects/:id/releases/evaluate', async (c) =>
-      c.json({ releases: await evaluateReleases(deps, c.var.actor, c.req.param('id')) }),
-    )
-    .post('/releases/:id/approve', async (c) => {
-      await approveRelease(deps, c.var.actor, c.req.param('id'));
-      return c.body(null, 204);
-    })
-    .post('/releases/:id/decline', async (c) => {
-      await declineRelease(deps, c.var.actor, c.req.param('id'));
-      return c.body(null, 204);
-    })
-    .put('/projects/:id/release-mode', async (c) => {
-      const body = modeBody.safeParse(await c.req.json().catch(() => null));
-      if (!body.success) throw new AppError('request.invalid', 400, 'Expected a mode.');
-      await setReleaseMode(
-        deps,
-        c.var.actor,
-        c.req.param('id'),
-        body.data.mode,
-        body.data.hours ?? null,
-      );
-      return c.body(null, 204);
-    })
-    .post('/projects/:id/protect', async (c) =>
-      c.json({ protection: await protectProduction(deps, c.var.actor, c.req.param('id')) }),
-    )
-    .post('/projects/:id/rollback', async (c) => {
-      await rollbackProduction(deps, c.var.actor, c.req.param('id'));
-      return c.body(null, 204);
-    });
+  return (
+    new Hono<AppEnv>()
+      .get('/projects/:id/releases', async (c) => {
+        const releases = await listReleases(deps, c.var.actor, c.req.param('id'));
+        const p = await withOrganization(deps.pool, c.var.actor.organizationId, (client) =>
+          client.query<{
+            release_mode: ReleaseMode;
+            release_mode_until: Date | null;
+            production_protection: string;
+          }>(
+            'SELECT release_mode, release_mode_until, production_protection FROM projects WHERE id = $1',
+            [c.req.param('id')],
+          ),
+        );
+        const row = p.rows[0]!;
+        return c.json({
+          mode: modeInForce(row, deps.now()),
+          modeUntil: row.release_mode_until?.toISOString() ?? null,
+          protection: row.production_protection,
+          releases,
+        });
+      })
+      // Like the agents' propose_release: what dev holds is proposed, then every proposal is read.
+      .post('/projects/:id/releases/evaluate', async (c) => {
+        const proposal = await proposeFromDev(deps, c.var.actor, c.req.param('id'));
+        return c.json({
+          proposal,
+          releases: await evaluateReleases(deps, c.var.actor, c.req.param('id')),
+        });
+      })
+      .post('/releases/:id/approve', async (c) => {
+        await approveRelease(deps, c.var.actor, c.req.param('id'));
+        return c.body(null, 204);
+      })
+      .post('/releases/:id/decline', async (c) => {
+        await declineRelease(deps, c.var.actor, c.req.param('id'));
+        return c.body(null, 204);
+      })
+      .put('/projects/:id/release-mode', async (c) => {
+        const body = modeBody.safeParse(await c.req.json().catch(() => null));
+        if (!body.success) throw new AppError('request.invalid', 400, 'Expected a mode.');
+        await setReleaseMode(
+          deps,
+          c.var.actor,
+          c.req.param('id'),
+          body.data.mode,
+          body.data.hours ?? null,
+        );
+        return c.body(null, 204);
+      })
+      .post('/projects/:id/protect', async (c) =>
+        c.json({ protection: await protectProduction(deps, c.var.actor, c.req.param('id')) }),
+      )
+      .post('/projects/:id/rollback', async (c) => {
+        await rollbackProduction(deps, c.var.actor, c.req.param('id'));
+        return c.body(null, 204);
+      })
+  );
 }

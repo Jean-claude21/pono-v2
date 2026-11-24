@@ -342,6 +342,7 @@ export async function putOnline(
       gitUrl: code.adapter.sshUrl(project.repository),
       branch: project.default_branch,
       deployKeyId: key.id,
+      previewBranches: project.default_branch === 'dev' ? [] : ['dev'],
     }).catch((error: unknown) => {
       // A name taken by someone else at the host: another one, then.
       if (error instanceof ProviderError && error.status === 422) return null;
@@ -354,11 +355,15 @@ export async function putOnline(
       .addPushHook(code.credential, project.repository, created.pushHookUrl)
       .catch(() => undefined);
   await h.startBuild?.(hosting.credential, created.site.ref).catch(() => undefined);
+  // dev may hold work pushed before the site existed: its preview is built now, not at the next push.
+  if (project.default_branch !== 'dev')
+    await h.buildBranch?.(hosting.credential, created.site.ref, 'dev').catch(() => undefined);
 
   await withOrganization(deps.pool, actor.organizationId, async (client) => {
     await client.query(
+      // The address exists from now on; whether it answers is the next reading's (« unknown » until then).
       `UPDATE projects SET hosting_provider = $2, hosting_ref = $3, hosting_status = 'found',
-         production_url = $4 WHERE id = $1`,
+         production_url = $4, link_status = 'unknown' WHERE id = $1`,
       [projectId, h.id, created.site.ref, created.site.productionUrl],
     );
     await record(client, {

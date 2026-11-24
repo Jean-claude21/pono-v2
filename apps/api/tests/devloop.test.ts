@@ -338,6 +338,9 @@ describe('the agent sees what it builds (D-038)', () => {
     expect(reloads('node --watch server.mjs')).toBe(true);
     expect(reloads('npx --yes pnpm@10 run dev --host 0.0.0.0')).toBe(true);
     expect(reloads('vite --port 3000')).toBe(true);
+    expect(reloads('npx --yes pnpm@10 dev')).toBe(true);
+    expect(reloads('npm run dev')).toBe(true);
+    expect(reloads('pnpm devtools')).toBe(false);
     expect(reloads('python3 -m http.server 3000')).toBe(false);
     expect(reloads(null)).toBe(false);
   });
