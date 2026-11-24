@@ -1,6 +1,5 @@
 import { createHmac, timingSafeEqual } from 'node:crypto';
 import type { BillingProvider } from '../../features/billing/index.js';
-import { PLANS, type Plan } from '../../features/servers/index.js';
 import { ProviderError, type Fetch } from '../../platform/http.js';
 
 const ID = 'moneroo';
@@ -56,23 +55,27 @@ export function monerooBilling(options: {
     accept: 'application/json',
     'content-type': 'application/json',
   };
-  const amountOf = (plan: Exclude<Plan, 'free'>) => Math.round(PLANS[plan].priceMicros / 1_000_000);
 
   return {
     id: ID,
-    async checkout({ organizationId, plan, email, name, returnUrl }) {
+    async checkout({ organizationId, plan, priceMicros, email, name, returnUrl }) {
       if (!email)
         throw new ProviderError(ID, 400, 'Moneroo needs an email address to take a payment.');
       const response = await options.fetch(`${API}/payments/initialize`, {
         method: 'POST',
         headers,
         body: JSON.stringify({
-          amount: amountOf(plan),
+          amount: Math.round(priceMicros / 1_000_000),
           currency,
           description: `Pono ${plan} — ${PAID_DAYS} days`,
           return_url: `${returnUrl}?plan=paid`,
           customer: { email, ...names(name, email) },
-          metadata: { organization: organizationId, plan },
+          // The price asked, kept with the payment: the webhook checks the amount paid against it.
+          metadata: {
+            organization: organizationId,
+            plan,
+            price: String(Math.round(priceMicros / 1_000_000)),
+          },
         }),
         signal: AbortSignal.timeout(15_000),
       });
@@ -99,7 +102,8 @@ export function monerooBilling(options: {
         !organizationId ||
         (plan !== 'solo' && plan !== 'pro') ||
         code !== currency ||
-        payment.amount < amountOf(plan)
+        !(Number(payment.metadata?.price) > 0) ||
+        payment.amount < Number(payment.metadata?.price)
       )
         return null;
       return {

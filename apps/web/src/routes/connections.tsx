@@ -40,6 +40,7 @@ const KINDS: readonly { kind: string; need: Need; why: () => string }[] = [
 const ROLES: Record<string, () => string> = {
   github: m.provider_github,
   netlify: m.provider_netlify,
+  vercel: m.provider_vercel,
   cloudflare: m.provider_cloudflare,
   coolify: m.provider_coolify,
   neon: m.provider_neon,

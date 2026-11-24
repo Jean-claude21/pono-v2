@@ -101,7 +101,9 @@ export function projectRoutes(deps: ProjectsDeps): Hono<AppEnv> {
       const id = c.req.param('id');
       if (!z.uuid().safeParse(id).success)
         throw new AppError('project.not_found', 404, 'No such project.');
-      return c.json(await putOnline(deps, c.var.actor, id));
+      const body = (await c.req.json().catch(() => ({}))) as { provider?: unknown };
+      const provider = typeof body?.provider === 'string' ? body.provider : undefined;
+      return c.json(await putOnline(deps, c.var.actor, id, provider));
     })
     .get('/projects', async (c) => {
       const { projects, latest } = await withOrganization(

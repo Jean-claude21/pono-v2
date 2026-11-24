@@ -2,6 +2,8 @@ import { Hono } from 'hono';
 import { adminRoutes } from './features/admin/index.js';
 import { analyticsRoutes, type SiteAnalytics } from './features/analytics/index.js';
 import { billingWebhook, planRoutes, type BillingProvider } from './features/billing/index.js';
+import type { LicenceProvider } from './features/billing/licences.js';
+import { offerRoutes } from './features/offers/index.js';
 import { agentRoutes, mcpHandler } from './features/agents/index.js';
 import { oauthMetadata, oauthRoutes } from './features/agents/oauth.js';
 import { variableRoutes } from './features/variables/index.js';
@@ -46,6 +48,9 @@ export interface AppDeps {
   serviceDomains?: Record<string, readonly string[]>;
   catalog: Catalog;
   billing: BillingProvider;
+  /** Plans sold as licence keys (D-041), and the environment's values of the operator's settings. */
+  licences?: LicenceProvider;
+  settingsEnv?: Partial<Record<string, string>>;
   /** Where projects' visits are counted (D-017): Umami, PostHog. */
   analytics?: SiteAnalytics[];
   admins: string[];
@@ -77,6 +82,8 @@ export function createApp(appDeps: AppDeps): Hono<AppEnv> {
   app.route('/oauth', oauthRoutes(deps));
   app.route('/health', healthRoutes({ databaseUp: () => ping(deps.pool) }));
   app.route('/auth', authRoutes(deps));
+  // Read signed out, before the session check of /v1: the landing shows the plans as sold.
+  app.route('/v1/offers', offerRoutes(deps));
 
   const v1 = new Hono<AppEnv>();
   v1.use('*', requireSession(deps));

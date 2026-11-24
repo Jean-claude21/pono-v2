@@ -1,6 +1,7 @@
 import { createFileRoute } from '@tanstack/react-router';
 import { useState, type FormEvent } from 'react';
 import { OwnSkills, type SkillCard } from '@/features/catalog/OwnSkills';
+import { SkillReader } from '@/features/catalog/SkillReader';
 import { LimitChooser, type LimitDetail } from '@/features/servers/LimitChooser';
 import { Shell } from '@/features/shell/Shell';
 import { api, useApi } from '@/lib/api';
@@ -48,6 +49,7 @@ function Catalog() {
     '/v1/catalog/templates',
   );
   const skills = useApi<{ skills: SkillCard[] }>('/v1/catalog/skills');
+  const [reading, setReading] = useState<string | null>(null);
   const [chosen, setChosen] = useState<Template | null>(null);
   const [tab, setTab] = useState<Tab>('templates');
   const [category, setCategory] = useState('all');
@@ -200,6 +202,17 @@ function Catalog() {
                           <span className="tag">{label('scope', x.scope)}</span>
                         </div>
                         <p className="tiny soft">{x.description}</p>
+                        {reading === x.name ? (
+                          <SkillReader name={x.name} onClose={() => setReading(null)} />
+                        ) : (
+                          <button
+                            type="button"
+                            className="btn btn-ghost btn-xs mt-sm"
+                            onClick={() => setReading(x.name)}
+                          >
+                            {m.catalog_skill_read({ count: String(x.files?.length ?? 0) })}
+                          </button>
+                        )}
                       </li>
                     ))}
                 </ul>

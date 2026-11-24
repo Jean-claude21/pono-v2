@@ -8,6 +8,8 @@ export interface SkillCard {
   family: string;
   description: string;
   scope: string;
+  /** Paths of its other files: references, scripts, examples. */
+  files?: string[];
 }
 
 /**

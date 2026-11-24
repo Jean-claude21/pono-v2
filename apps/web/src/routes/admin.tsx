@@ -1,5 +1,6 @@
 import { createFileRoute } from '@tanstack/react-router';
 import { AdminCatalog, type Entry } from '@/features/admin/AdminCatalog';
+import { AdminOffers } from '@/features/admin/AdminOffers';
 import { Shell } from '@/features/shell/Shell';
 import { Card, PageHead, StateDot, Stats, Thin } from '@/features/shell/ui';
 import { api, useApi } from '@/lib/api';
@@ -304,6 +305,7 @@ function Admin() {
         )}
       </Card>
 
+      <AdminOffers />
       <AdminCatalog
         entries={catalog.result?.ok ? catalog.result.data.entries : null}
         reload={catalog.reload}
