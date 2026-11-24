@@ -16,12 +16,14 @@ import {
   stripeBilling,
   unavailableBilling,
 } from './infrastructure/providers/stripe.js';
+import { chariowLicences } from './infrastructure/providers/chariow.js';
 import { monerooBilling } from './infrastructure/providers/moneroo.js';
 import { unavailableServerHost } from './infrastructure/providers/no-server-host.js';
 import { cloudflareHosting } from './infrastructure/providers/cloudflare.js';
 import { githubCodeHost } from './infrastructure/providers/github.js';
 import { httpLinkChecker } from './infrastructure/providers/links.js';
 import { netlifyHosting } from './infrastructure/providers/netlify.js';
+import { vercelHosting } from './infrastructure/providers/vercel.js';
 import { neonDatabase } from './infrastructure/providers/neon.js';
 import {
   cloudflareUsage,
@@ -66,6 +68,7 @@ const netlify = netlifyHosting(
     ? { clientId: config.NETLIFY_OAUTH_CLIENT_ID, clientSecret: config.NETLIFY_OAUTH_CLIENT_SECRET }
     : undefined,
 );
+const vercel = vercelHosting(fetch);
 const coolify = coolifyHosting(fetch);
 const cloudflare = cloudflareHosting(fetch);
 const neon = neonDatabase(fetch);
@@ -74,7 +77,18 @@ const umami = umamiCloud(fetch);
 const umamiSelf = umamiSelfHosted(fetch);
 const posthog = posthogAnalytics(fetch);
 
-const connectable = [github, netlify, cloudflare, coolify, neon, openai, umami, umamiSelf, posthog];
+const connectable = [
+  github,
+  netlify,
+  vercel,
+  cloudflare,
+  coolify,
+  neon,
+  openai,
+  umami,
+  umamiSelf,
+  posthog,
+];
 
 /**
  * What a server with a limited network always reaches (D-031): the package registries, so that an
@@ -112,7 +126,7 @@ const deps: AppDeps = {
   ],
   adapters: {
     codeHosts: [github],
-    hostings: [netlify, cloudflare, coolify],
+    hostings: [netlify, vercel, cloudflare, coolify],
     databases: [neon],
     links: httpLinkChecker(fetch),
   },
@@ -152,6 +166,15 @@ const deps: AppDeps = {
               fetch,
             })
           : unavailableBilling(),
+  // Licences are always offered to the operator: the store key may come from the console (D-041).
+  licences: chariowLicences(fetch),
+  settingsEnv: {
+    ...(config.CHARIOW_API_KEY ? { CHARIOW_API_KEY: config.CHARIOW_API_KEY } : {}),
+    ...(config.CHARIOW_STORE_URL ? { CHARIOW_STORE_URL: config.CHARIOW_STORE_URL } : {}),
+    ...(config.PONO_SALES_CONTACT_URL
+      ? { PONO_SALES_CONTACT_URL: config.PONO_SALES_CONTACT_URL }
+      : {}),
+  },
   admins: config.PONO_ADMIN_LOGINS.split(',')
     .map((l) => l.trim())
     .filter(Boolean),

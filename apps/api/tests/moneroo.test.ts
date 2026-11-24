@@ -48,6 +48,7 @@ describe('Moneroo (D-023)', () => {
     const url = await billing.checkout({
       organizationId: 'org-1',
       plan: 'pro',
+      priceMicros: 39_000_000,
       email: 'ada@example.com',
       name: 'Ada Lovelace',
       returnUrl: 'https://pono.test/settings',
@@ -58,12 +59,13 @@ describe('Moneroo (D-023)', () => {
       currency: 'USD',
       return_url: 'https://pono.test/settings?plan=paid',
       customer: { email: 'ada@example.com', first_name: 'Ada', last_name: 'Lovelace' },
-      metadata: { organization: 'org-1', plan: 'pro' },
+      metadata: { organization: 'org-1', plan: 'pro', price: '39' },
     });
     await expect(
       billing.checkout({
         organizationId: 'org-1',
         plan: 'solo',
+        priceMicros: 12_000_000,
         email: null,
         name: null,
         returnUrl: 'https://pono.test/settings',
@@ -77,13 +79,18 @@ describe('Moneroo (D-023)', () => {
       status: 'success',
       amount: 12,
       currency: { code: 'USD' },
-      metadata: { organization: 'org-2', plan: 'solo' },
+      metadata: { organization: 'org-2', plan: 'solo', price: '12' },
       customer: { email: 'ada@example.com' },
     };
     const m = fakeMoneroo({
       pay_ok: paid,
       pay_low: { ...paid, id: 'pay_low', amount: 1 },
       pay_failed: { ...paid, id: 'pay_failed', status: 'failed' },
+      pay_unpriced: {
+        ...paid,
+        id: 'pay_unpriced',
+        metadata: { organization: 'org-2', plan: 'solo' },
+      },
     });
     const billing = monerooBilling({ secretKey: 'sk', webhookSecret: SECRET, fetch: m.fetch });
     const event = (id: string, name = 'payment.success') =>
@@ -97,6 +104,8 @@ describe('Moneroo (D-023)', () => {
     });
     expect(await billing.event(event('pay_low'), sign(event('pay_low')))).toBeNull();
     expect(await billing.event(event('pay_failed'), sign(event('pay_failed')))).toBeNull();
+    // A payment without the price Pono asked is not one of Pono's (D-041).
+    expect(await billing.event(event('pay_unpriced'), sign(event('pay_unpriced')))).toBeNull();
     const failed = event('pay_ok', 'payment.failed');
     expect(await billing.event(failed, sign(failed))).toBeNull();
     await expect(billing.event(event('pay_ok'), 'forged')).rejects.toThrow();

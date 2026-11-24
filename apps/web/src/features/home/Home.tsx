@@ -1,5 +1,7 @@
 import { LocaleSwitch } from '@/features/shell/LocaleSwitch';
 import { Icon, type IconName } from '@/features/shell/ui';
+import { useApi } from '@/lib/api';
+import { label } from '@/lib/labels';
 import { nameOf } from '@/lib/providers';
 import { getLocale } from '@/paraglide/runtime.js';
 import * as m from '@/paraglide/messages.js';
@@ -13,6 +15,7 @@ const WORKS_WITH = [
   'codex',
   'cursor',
   'netlify',
+  'vercel',
   'cloudflare',
   'coolify',
   'neon',
@@ -35,12 +38,20 @@ const STEPS = [
   { title: m.home_step_3_title, body: m.home_step_3_body },
 ];
 
-/** The plans as the API knows them (servers awake at once, price per month in USD). */
+/** The plans' names and audiences; their price, servers and sale come from the operator (D-041). */
 const PLANS = [
-  { id: 'free', name: m.home_plan_free, servers: 1, price: 0, for: m.home_plan_free_for },
-  { id: 'solo', name: m.home_plan_solo, servers: 3, price: 12, for: m.home_plan_solo_for },
-  { id: 'pro', name: m.home_plan_pro, servers: 10, price: 39, for: m.home_plan_pro_for },
+  { id: 'free', name: m.home_plan_free, for: m.home_plan_free_for },
+  { id: 'solo', name: m.home_plan_solo, for: m.home_plan_solo_for },
+  { id: 'pro', name: m.home_plan_pro, for: m.home_plan_pro_for },
 ] as const;
+
+interface PublicOffer {
+  plan: string;
+  availability: 'available' | 'coming_soon' | 'on_request';
+  priceMicros: number | null;
+  activeServers: number;
+  contactUrl: string | null;
+}
 
 const FAQ = [
   { q: m.home_q1, a: m.home_a1 },
@@ -100,6 +111,7 @@ function Preview() {
 
 /** Pono's public page: what it is, for whom, how, and what it costs; then sign in with GitHub. */
 export function Home() {
+  const offers = useApi<{ offers: PublicOffer[] }>('/v1/offers');
   return (
     <div className="home">
       <header className="home-header">
@@ -240,31 +252,58 @@ export function Home() {
           <h2 className="mt-sm">{m.home_pricing_title()}</h2>
           <p className="intro">{m.home_pricing_body()}</p>
           <div className="home-plans">
-            {PLANS.map((p) => (
-              <article key={p.id} className={p.id === 'solo' ? 'featured' : undefined}>
-                <header>
-                  <h3>{p.name()}</h3>
-                  {p.id === 'solo' && <span className="tag">{m.home_plan_popular()}</span>}
-                </header>
-                <p className="home-price">
-                  <b className="figures">{price(p.price)}</b>
-                  <span className="mute">{m.home_plan_month()}</span>
-                </p>
-                <p className="home-plan-servers">
-                  <Icon name="server" />
-                  {p.servers === 1
-                    ? m.home_plan_server_one()
-                    : m.home_plan_servers({ count: String(p.servers) })}
-                </p>
-                <p className="soft small">{p.for()}</p>
-                <a
-                  className={`btn ${p.id === 'solo' ? 'btn-primary' : 'btn-ghost'} btn-sm`}
-                  href={SIGN_IN}
-                >
-                  {p.id === 'free' ? m.home_cta() : m.home_plan_choose()}
-                </a>
-              </article>
-            ))}
+            {PLANS.map((p) => {
+              const offer = offers.result?.ok
+                ? offers.result.data.offers.find((o) => o.plan === p.id)
+                : undefined;
+              const sold = !offer || offer.availability === 'available';
+              const featured = p.id === 'solo' && sold;
+              return (
+                <article key={p.id} className={featured ? 'featured' : undefined}>
+                  <header>
+                    <h3>{p.name()}</h3>
+                    {featured && <span className="tag">{m.home_plan_popular()}</span>}
+                  </header>
+                  <p className="home-price">
+                    {!offer ? (
+                      <b className="figures">—</b>
+                    ) : sold ? (
+                      <>
+                        <b className="figures">{price((offer.priceMicros ?? 0) / 1_000_000)}</b>
+                        <span className="mute">{m.home_plan_month()}</span>
+                      </>
+                    ) : (
+                      <b>{label('availability', offer.availability)}</b>
+                    )}
+                  </p>
+                  {offer && (
+                    <p className="home-plan-servers">
+                      <Icon name="server" />
+                      {offer.activeServers === 1
+                        ? m.home_plan_server_one()
+                        : m.home_plan_servers({ count: String(offer.activeServers) })}
+                    </p>
+                  )}
+                  <p className="soft small">{p.for()}</p>
+                  {offer?.availability === 'coming_soon' ? (
+                    <span className="btn btn-ghost btn-sm" aria-disabled="true">
+                      {label('availability', 'coming_soon')}
+                    </span>
+                  ) : offer?.availability === 'on_request' ? (
+                    <a className="btn btn-ghost btn-sm" href={offer.contactUrl ?? SIGN_IN}>
+                      {m.settings_contact()}
+                    </a>
+                  ) : (
+                    <a
+                      className={`btn ${featured ? 'btn-primary' : 'btn-ghost'} btn-sm`}
+                      href={SIGN_IN}
+                    >
+                      {p.id === 'free' ? m.home_cta() : m.home_plan_choose()}
+                    </a>
+                  )}
+                </article>
+              );
+            })}
           </div>
           <p className="mute small mt-lg">{m.home_plan_pay()}</p>
         </div>

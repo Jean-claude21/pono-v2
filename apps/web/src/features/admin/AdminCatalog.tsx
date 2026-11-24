@@ -9,7 +9,7 @@ export interface Entry {
   organization: string | null;
   kind: 'template' | 'skill';
   name: string;
-  body: { body?: string };
+  body: { body?: string; files?: Record<string, string> };
   sharing: string;
   updatedAt: string;
 }
@@ -84,6 +84,13 @@ export function AdminCatalog({
                       {label('kind_entry', e.kind)} · {e.organization ?? m.admin_catalog_official()}
                     </small>
                     {open === e.id && e.body.body && <pre className="code">{e.body.body}</pre>}
+                    {open === e.id &&
+                      Object.entries(e.body.files ?? {}).map(([path, content]) => (
+                        <details key={path} className="mt-sm">
+                          <summary className="figures small">{path}</summary>
+                          <pre className="code">{content}</pre>
+                        </details>
+                      ))}
                   </td>
                   <td>
                     <StateDot
