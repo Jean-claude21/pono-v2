@@ -39,9 +39,11 @@ export function watching(command: string): string {
 export function reloads(command: string | null): boolean {
   return Boolean(
     command &&
-    /\b(vite|next|nuxt|astro|remix|svelte-kit|webpack-dev-server|nodemon|tsx watch|run dev)\b|--watch\b/.test(
+    (/\b(vite|next|nuxt|astro|remix|svelte-kit|webpack-dev-server|nodemon|tsx watch)\b|--watch\b/.test(
       command,
-    ),
+    ) ||
+      // A package manager's dev script (`pnpm dev`, `npm run dev`): the templates' framework servers.
+      /\b(npm|pnpm|yarn|bun)(@[\w.-]+)?\s+(run\s+)?dev\b/.test(command)),
   );
 }
 

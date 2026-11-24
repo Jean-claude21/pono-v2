@@ -513,3 +513,27 @@ avec `curl`), ni compter sur le rechargement (son petit serveur Node lisait les 
 
 **Prouvé** (`apps/api/scripts/eyes-live.ts`) sur un serveur `pono-web` neuf : une modification
 servie sans redémarrage, une capture JPEG reçue, l'erreur de console rapportée.
+
+## D-039 — Du chat à la production, sans machine à soi
+
+**Tranché le 2026-11-24.**
+
+Un parcours joué uniquement par MCP, comme ChatGPT ou Claude.ai le font, a montré qu'un agent de
+chat ne pouvait jamais mener son travail en production : il pousse sur `dev`, mais rien n'ouvrait la
+proposition `dev` → branche principale, et un site créé par « Mettre en ligne » ne construisait
+jamais d'aperçu de `dev`, si bien que le garde-fou « preview » refusait toute proposition.
+
+- `propose_release` (et le bouton « Proposer dev et évaluer » de la console) ouvre la proposition
+  depuis `dev`, ou retrouve celle qui est ouverte, puis l'évalue. Pono propose ; ce qui part en
+  production reste la règle du projet.
+- Le site créé construit aussi `dev` en aperçu, et dès sa création, pour le travail poussé avant.
+- Une proposition refusée seulement parce que son aperçu n'était pas encore construit est réévaluée
+  à l'appel suivant, au lieu de rester refusée pour toujours.
+- Les commandes `pnpm dev`, `npm run dev`… des gabarits comptent comme rechargeant seules.
+- Un site tout juste créé a une adresse dont l'état est « inconnu », pas « aucune adresse ».
+
+**Prouvé** (`apps/api/scripts/mcp-live.ts`, environ 5 minutes) : par MCP seul, template « site »
+lancé, dev, capture, modification suivie sans redémarrage, poussée, mise en ligne, proposition
+ouverte depuis `dev`, réévaluée une fois l'aperçu construit, approuvée par la personne, production
+qui montre la modification, sauvegarde du serveur. Les gabarits « shop » et « dashboard » vont aussi
+en production par Pono (`template-live.ts`, `TEMPLATE=shop|dashboard`).

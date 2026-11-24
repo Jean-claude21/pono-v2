@@ -12,6 +12,9 @@
 const BASE = process.env.PONO_CONSOLE_URL ?? 'http://localhost:3000';
 const GH = process.env.GITHUB_TOKEN;
 const NETLIFY = process.env.NETLIFY_AUTH_TOKEN;
+// TEMPLATE=shop EXPECT='Maison' runs another starter; EXPECT is a text its home page shows.
+const TEMPLATE = process.env.TEMPLATE ?? 'site';
+const EXPECT = process.env.EXPECT ?? 'Atelier';
 if (!GH || !NETLIFY) throw new Error('GITHUB_TOKEN and NETLIFY_AUTH_TOKEN are required.');
 
 const cookies = new Map<string, string>();
@@ -80,8 +83,8 @@ for (const s of servers.filter((x) => x.status === 'running'))
   await call(`/v1/servers/${s.id}/sleep`, 'POST');
 
 const name = `pono-proof-${Date.now().toString(36)}`;
-const launched = await call('/v1/launch', 'POST', { template: 'site', name, private: true });
-check(launched.status === 201, `launched from « site » (${launched.status})`);
+const launched = await call('/v1/launch', 'POST', { template: TEMPLATE, name, private: true });
+check(launched.status === 201, `launched from « ${TEMPLATE} » (${launched.status})`);
 const { projectId, repository, server, durationMs } = launched.body;
 log('project', { repository, server: server.status, seconds: Math.round(durationMs / 1000) });
 
@@ -104,7 +107,7 @@ try {
   const entry = await call(`/v1/projects/${projectId}/preview`);
   const preview = await fetch(entry.location!);
   check(
-    preview.status === 200 && (await preview.text()).includes('Atelier'),
+    preview.status === 200 && (await preview.text()).includes(EXPECT),
     'the private link serves the preview',
   );
 
@@ -120,7 +123,7 @@ try {
   for (let i = 0; i < 40 && !live; i++) {
     await sleep(10_000);
     const page = await fetch(url).catch(() => null);
-    live = Boolean(page?.ok && (await page.text()).includes('Atelier'));
+    live = Boolean(page?.ok && (await page.text()).includes(EXPECT));
     if (i % 3 === 0) log('production', live ? 'up' : 'building');
   }
   check(live, 'production answers with the site');
@@ -129,8 +132,8 @@ try {
     id: string;
     value: { launched: number; live: number };
   }[];
-  const site = gallery.find((t) => t.id === 'site')!;
-  log('value of « site »', site.value);
+  const site = gallery.find((t) => t.id === TEMPLATE)!;
+  log(`value of « ${TEMPLATE} »`, site.value);
   check(site.value.launched >= 1 && site.value.live >= 1, 'the template counts a live project');
 } finally {
   if (process.env.KEEP !== '1') {
