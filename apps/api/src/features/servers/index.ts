@@ -5,6 +5,7 @@ import { withOrganization, type Client, type Pool } from '../../platform/db.js';
 import { AppError } from '../../platform/errors.js';
 import type { Sealer } from '../../platform/secrets.js';
 import { record } from '../journal/index.js';
+import { offerOf } from '../offers/index.js';
 import type { InternalUsage, Reading } from '../usage/index.js';
 import {
   activeLimit,
@@ -122,7 +123,8 @@ export async function serversView(client: Client) {
   const servers = (await rows(client)).map(view);
   return {
     plan,
-    limit: activeLimit(plan),
+    // The operator sets each plan's servers (D-041); the code's table only when no offer is read.
+    limit: (await offerOf(client, plan).catch(() => null))?.activeServers ?? activeLimit(plan),
     active: servers.filter((s) => isActive(s.status)).length,
     servers,
   };

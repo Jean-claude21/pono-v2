@@ -46,11 +46,12 @@ export interface Loaded<T> {
   reload: () => void;
 }
 
-/** Reads a path once in the browser, and again on `reload`. */
-export function useApi<T>(path: string): Loaded<T> {
+/** Reads a path once in the browser, and again on `reload`; nothing while the path is null. */
+export function useApi<T>(path: string | null): Loaded<T> {
   const [result, setResult] = useState<ApiResult<T> | null>(null);
   const [turn, setTurn] = useState(0);
   useEffect(() => {
+    if (path === null) return;
     let live = true;
     void api<T>(path).then((r) => {
       if (live) setResult(r);

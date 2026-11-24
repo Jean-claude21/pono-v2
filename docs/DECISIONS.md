@@ -557,3 +557,44 @@ landing disait pourtant « ne dépasse jamais son budget ».
 
 **Prouvé** (`apps/api/scripts/budget-live.ts`) : dépense du mois lue par serveur chez Agent37,
 serveur jetable dont le budget est atteint mis en veille, puis libéré.
+
+## D-041 — Les offres réglées par l'exploitant, et les forfaits vendus par licence
+
+**Tranché le 2026-11-24.**
+
+Les prix et les serveurs de chaque forfait étaient écrits dans le code et sur la landing.
+
+- Chaque forfait a son offre en base (`plan_offers`) : prix, serveurs éveillés à la fois, et sa
+  vente : « en vente », « à venir » ou « sur demande ». La landing (`GET /v1/offers`, lu sans
+  connexion), la console, les limites de serveurs, Moneroo et la vue d'exploitation la lisent.
+  « À venir » et « sur demande » n'affichent pas de prix et ne se paient pas en ligne ; « sur
+  demande » mène au contact réglé. Le forfait gratuit reste gratuit et en vente.
+- Moneroo facture le prix de l'offre au moment du paiement ; ce prix voyage avec le paiement, et le
+  webhook vérifie le montant payé contre lui.
+- Chariow vend un forfait comme produit de licence. La personne saisit sa clé dans Réglages ; Pono la
+  lit à la boutique, l'active une fois pour son atelier, et le forfait court jusqu'à la fin de la
+  licence (ou les jours réglés pour une licence sans fin). Une licence compte une fois : saisie dans
+  un autre atelier, elle est refusée.
+- Les réglages de l'exploitant (clé Chariow, adresse de la boutique, contact) se posent dans
+  l'administration : une clé est vérifiée auprès de la boutique, scellée, jamais réaffichée ; à
+  défaut, la valeur de l'environnement sert.
+- Le badge « Le plus choisi » devient « Conseillé » : sans clients payants, il n'était pas vrai.
+
+**Prouvé** : clé Chariow réelle acceptée, fausse clé refusée, clé de licence inconnue reconnue
+comme telle ; parcours complet (activation, double saisie, autre atelier, licence révoquée, autre
+produit) sur une boutique simulée. L'activation réelle attend un produit de type licence sur la
+boutique.
+
+## D-042 — Vercel comme hébergeur
+
+**Tranché le 2026-11-24.**
+
+Vercel se relie comme Netlify (un jeton), et « Mettre en ligne » y crée le projet. Vercel atteint
+le dépôt par sa propre app GitHub : pas de clé de déploiement ni de webhook ; chaque branche
+poussée se construit, `dev` en aperçu avec le commit construit, que le garde-fou « preview » lit.
+Le jeton agit dans l'équipe par défaut du compte, gardée avec lui. Le retour arrière remet en
+production le déploiement précédent. Avec Netlify et Vercel reliés, `put_online` choisit par
+`provider`. Si l'app GitHub de Vercel n'a pas accès au dépôt, Pono le dit
+(`hosting.repository_access`).
+
+**Prouvé** : adaptateur contre un Vercel simulé. La preuve réelle attend un jeton Vercel.

@@ -149,6 +149,14 @@ export interface Hosting {
     },
   ): Promise<{ site: HostedSite; pushHookUrl: string | null }>;
   startBuild?(credential: string, ref: string): Promise<void>;
+  /**
+   * Creates the site from a repository the host reaches through its own app on the code host
+   * (Vercel, D-042): no deploy key, no hook; every pushed branch builds, `dev` as a preview.
+   */
+  createLinkedSite?(
+    credential: string,
+    input: { name: string; repository: string; branch: string },
+  ): Promise<{ site: HostedSite }>;
   /** Builds a branch already pushed as a preview, at its head (D-039): `dev`, before any push. */
   buildBranch?(credential: string, ref: string, branch: string): Promise<void>;
 }

@@ -445,11 +445,14 @@ function buildServer(deps: McpDeps, actor: Actor, scope: 'read' | 'act'): McpSer
     'put_online',
     {
       description:
-        "Creates the project's production site at the connected hosting (Netlify), linked to its repository: it builds now, then on every merge to the default branch. Call what_is_missing with goal publish first. Production still changes only through proposals, under the project's release rule. Give the person the production address.",
-      inputSchema: project,
+        "Creates the project's production site at the connected hosting (Netlify or Vercel), linked to its repository: it builds now, then on every merge to the default branch. With both connected, provider chooses (netlify, vercel). Call what_is_missing with goal publish first. Production still changes only through proposals, under the project's release rule. Give the person the production address.",
+      inputSchema: {
+        ...project,
+        provider: z.enum(['netlify', 'vercel']).optional(),
+      },
       annotations: act,
     },
-    async ({ projectId }) => acting(() => putOnline(deps, actor, projectId)),
+    async ({ projectId, provider }) => acting(() => putOnline(deps, actor, projectId, provider)),
   );
 
   server.registerTool(

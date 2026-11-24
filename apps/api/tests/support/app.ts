@@ -25,6 +25,7 @@ import type {
 import type { Reading, UsageSource } from '../../src/features/usage/index.js';
 import { createPool, type Pool } from '../../src/platform/db.js';
 import { ProviderError } from '../../src/platform/http.js';
+import type { Licence, LicenceProvider } from '../../src/features/billing/licences.js';
 import { Sealer } from '../../src/platform/secrets.js';
 import { devBilling } from '../../src/infrastructure/providers/stripe.js';
 
@@ -174,12 +175,45 @@ export function fakeAnalytics(w: World): SiteAnalytics {
   };
 }
 
+/** A licence store (D-041): knows the keys of `world.licences`, with the API key `store-key`. */
+function fakeLicences(w: World): LicenceProvider {
+  const known = (apiKey: string) => {
+    if (apiKey !== 'store-key') throw new ProviderError('store', 401, 'bad key');
+  };
+  return {
+    id: 'store',
+    async read(apiKey, key) {
+      known(apiKey);
+      return w.licences.get(key) ?? null;
+    },
+    async activate(apiKey, key, device) {
+      known(apiKey);
+      const l = w.licences.get(key)!;
+      w.activations.push(`${key}@${device}`);
+      const active = { ...l, status: 'active' as const, usable: true };
+      w.licences.set(key, active);
+      return active;
+    },
+    async products(apiKey) {
+      known(apiKey);
+      return [{ id: 'prd_solo', name: 'Pono Solo', licence: true }];
+    },
+    async store(apiKey) {
+      known(apiKey);
+      return { name: 'Store', url: 'https://store.test' };
+    },
+  };
+}
+
 export interface World {
   proposals: Map<string, Proposal[]>;
   /** Pushed branches: `fullName@branch` → head, for proposals opened from them (D-039). */
   branchHeads: Map<string, string>;
   /** What each server spent this month at the host, by external id (D-040). */
   spend: Map<string, number>;
+  /** Licence keys a store sold (D-041), and the keys activated, with the device. */
+  licences: Map<string, Licence>;
+  activations: string[];
   proposalFiles: Map<string, ChangedFile[]>;
   statuses: { fullName: string; sha: string; state: string }[];
   merged: string[];
@@ -223,6 +257,8 @@ export function world(): World {
     proposals: new Map(),
     branchHeads: new Map(),
     spend: new Map(),
+    licences: new Map(),
+    activations: [],
     previewBranches: new Map(),
     branchBuilds: [],
     proposalFiles: new Map(),
@@ -452,6 +488,8 @@ export function testApp(): TestApp {
           app.request(String(url).replace('http://api.test', ''), init as RequestInit),
         ),
     }),
+    licences: fakeLicences(w),
+    settingsEnv: {},
     admins: ['operator'],
     rateLimits: { auth: 100_000, v1: 100_000, mcp: 100_000 },
     now: () => now.value,

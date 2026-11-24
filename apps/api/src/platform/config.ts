@@ -27,6 +27,10 @@ const schema = z.object({
     .regex(/^[a-z0-9][a-z0-9-]{1,62}$/)
     .optional(),
   MONEROO_SECRET_KEY: z.string().min(1).optional(),
+  // Plans sold as licence keys (D-041); the admin console can set them instead.
+  CHARIOW_API_KEY: z.string().min(1).optional(),
+  CHARIOW_STORE_URL: z.string().url().optional(),
+  PONO_SALES_CONTACT_URL: z.string().min(1).optional(),
   MONEROO_WEBHOOK_SECRET: z.string().min(1).optional(),
   PONO_MONEROO_CURRENCY: z.string().length(3).default('USD'),
   /** Pono's OAuth application at Netlify (D-029): a click instead of a key. */

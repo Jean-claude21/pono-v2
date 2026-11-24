@@ -281,6 +281,8 @@ export async function putOnline(
   deps: ProjectsDeps,
   actor: Actor,
   projectId: string,
+  /** The hosting to create the site at, when several are connected (D-042). */
+  provider?: string,
 ): Promise<{ created: boolean; provider: string; productionUrl: string | null }> {
   const project = await withOrganization(deps.pool, actor.organizationId, async (client) => {
     const { rows } = await client.query<{
@@ -306,14 +308,40 @@ export async function putOnline(
   const creds = await credentials(deps, actor.organizationId);
   const code = codeHostOf(deps, creds);
   const hosting = connected(deps.adapters.hostings, creds).find(
-    (h) => h.adapter.newDeployKey && h.adapter.createSite,
+    (h) =>
+      (!provider || h.adapter.id === provider) &&
+      ((h.adapter.newDeployKey && h.adapter.createSite) || h.adapter.createLinkedSite),
   );
   if (!hosting)
     throw new AppError(
       'release.no_hosting',
       409,
-      'Connect a hosting that Pono can create a site at (Netlify).',
+      'Connect a hosting that Pono can create a site at (Netlify, Vercel).',
     );
+  const base = project.repository
+    .split('/')[1]!
+    .toLowerCase()
+    .replace(/[^a-z0-9-]+/g, '-');
+  if (hosting.adapter.createLinkedSite) {
+    const linked = await hosting.adapter
+      .createLinkedSite(hosting.credential, {
+        name: base.slice(0, 90),
+        repository: project.repository,
+        branch: project.default_branch,
+      })
+      .catch((error: unknown) => {
+        // The host's own app does not reach this repository yet.
+        if (error instanceof ProviderError && (error.status === 400 || error.status === 404))
+          throw new AppError(
+            'hosting.repository_access',
+            409,
+            "The hosting's app on the code host does not reach this repository: give it access, then try again.",
+            { provider: hosting.adapter.id },
+          );
+        throw error;
+      });
+    return siteCreated(deps, actor, projectId, hosting.adapter.id, linked.site);
+  }
   if (!code.adapter.grantReadKey || !code.adapter.sshUrl)
     throw new AppError('hosting.unsupported', 501, 'This code host cannot lend a deploy key.');
 
@@ -330,10 +358,6 @@ export async function putOnline(
         );
       throw error;
     });
-  const base = project.repository
-    .split('/')[1]!
-    .toLowerCase()
-    .replace(/[^a-z0-9-]+/g, '-');
   let created: Awaited<ReturnType<NonNullable<typeof h.createSite>>> | null = null;
   for (let attempt = 0; attempt < 3 && !created; attempt++) {
     const name = attempt === 0 ? base : `${base}-${Math.random().toString(36).slice(2, 7)}`;
@@ -359,12 +383,22 @@ export async function putOnline(
   if (project.default_branch !== 'dev')
     await h.buildBranch?.(hosting.credential, created.site.ref, 'dev').catch(() => undefined);
 
+  return siteCreated(deps, actor, projectId, h.id, created.site);
+}
+
+async function siteCreated(
+  deps: ProjectsDeps,
+  actor: Actor,
+  projectId: string,
+  provider: string,
+  site: HostedSite,
+): Promise<{ created: true; provider: string; productionUrl: string | null }> {
   await withOrganization(deps.pool, actor.organizationId, async (client) => {
     await client.query(
       // The address exists from now on; whether it answers is the next reading's (« unknown » until then).
       `UPDATE projects SET hosting_provider = $2, hosting_ref = $3, hosting_status = 'found',
          production_url = $4, link_status = 'unknown' WHERE id = $1`,
-      [projectId, h.id, created.site.ref, created.site.productionUrl],
+      [projectId, provider, site.ref, site.productionUrl],
     );
     await record(client, {
       organizationId: actor.organizationId,
@@ -372,8 +406,8 @@ export async function putOnline(
       action: 'project.site_created',
       actorPerson: actor.personId,
       channel: actor.channel,
-      detail: { provider: h.id, url: created.site.productionUrl },
+      detail: { provider, url: site.productionUrl },
     });
   });
-  return { created: true, provider: h.id, productionUrl: created.site.productionUrl };
+  return { created: true, provider, productionUrl: site.productionUrl };
 }

@@ -2,6 +2,8 @@
 const NAMES: Record<string, string> = {
   github: 'GitHub',
   netlify: 'Netlify',
+  vercel: 'Vercel',
+  chariow: 'Chariow',
   cloudflare: 'Cloudflare',
   coolify: 'Coolify',
   neon: 'Neon',
