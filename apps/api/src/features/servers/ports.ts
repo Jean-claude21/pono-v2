@@ -37,6 +37,11 @@ export interface ProjectServerHost {
   /** null when the provider no longer knows it. */
   get(externalId: string): Promise<HostedServer | null>;
   sleep(externalId: string): Promise<void>;
+  /**
+   * What each server spent since the start of the UTC month, awake time and paid calls together, by
+   * external id (D-040). The host caps only paid calls: Pono holds the rest of the budget itself.
+   */
+  monthSpend?(now: Date): Promise<Map<string, number>>;
   wake(externalId: string): Promise<void>;
   destroy(externalId: string): Promise<void>;
   /** Runs a shell command on the server and waits for it (D-020). A failing command still answers. */

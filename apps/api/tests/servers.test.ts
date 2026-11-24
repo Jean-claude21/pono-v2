@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { estimatedMonthToDate } from '../src/features/servers/domain.js';
+import { syncServers } from '../src/features/servers/index.js';
 import { withOrganization } from '../src/platform/db.js';
 import { call, signIn, testApp, type TestApp } from './support/app.js';
 
@@ -183,5 +184,40 @@ describe('project servers (D-004)', () => {
 
   it('estimates half a month at mid-month', () => {
     expect(estimatedMonthToDate(3_000_000, new Date('2026-11-16T00:00:00Z'))).toBe(1_500_000);
+  });
+});
+
+describe('a server that spent its budget (D-040)', () => {
+  it('is put to sleep by the cycle, journaled, and cannot be woken until the next month', async () => {
+    const { cookie, projects, org } = await workshop(1);
+    const { server } = await (
+      await call(t, cookie, `/v1/projects/${projects[0]}/server`, {
+        method: 'POST',
+        body: { agent: 'none' },
+      })
+    ).json();
+    const hosted = [...t.world.servers.entries()].at(-1)!;
+    t.world.spend.set(hosted[0], 4_999_999);
+    await syncServers(t.deps, org);
+    expect(hosted[1].status).toBe('running');
+
+    t.world.spend.set(hosted[0], 5_000_000);
+    await syncServers(t.deps, org);
+    expect(hosted[1].status).toBe('sleeping');
+    const list = await (await call(t, cookie, '/v1/servers')).json();
+    expect(list.servers.find((s: { id: string }) => s.id === server.id).status).toBe('sleeping');
+    const detail = await (await call(t, cookie, `/v1/projects/${projects[0]}`)).json();
+    expect(detail.journal.map((j: { action: string }) => j.action)).toContain(
+      'server.budget_reached',
+    );
+
+    const wake = await call(t, cookie, `/v1/servers/${server.id}/wake`, {
+      method: 'POST',
+      body: {},
+    });
+    expect(wake.status).toBe(402);
+    expect((await wake.json()).error.code).toBe('servers.budget_reached');
+    expect(hosted[1].status).toBe('sleeping');
+    t.world.spend.delete(hosted[0]);
   });
 });
