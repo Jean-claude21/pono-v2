@@ -36,7 +36,12 @@ import { activeCredentials, type Connectable } from '../connections/index.js';
 import { LEVEL_GUIDANCE, LEVELS, levelOf, setLevel } from '../identity/index.js';
 import { manifestView, proposeSkills } from '../manifest/index.js';
 import { importProject, putOnline, refreshProject } from '../projects/application.js';
-import { evaluateReleases, listReleases, requestRollback } from '../releases/index.js';
+import {
+  evaluateReleases,
+  listReleases,
+  proposeFromDev,
+  requestRollback,
+} from '../releases/index.js';
 import {
   backupServer,
   listBackups,
@@ -77,7 +82,9 @@ errors: fix them before going on. undo_edit puts a file back. When dev_status sa
 preview follows the files by itself; otherwise call start_dev again after a change. You can see the
 page yourself: preview_screenshot returns a capture (desktop or mobile) and the console errors.
 Look at it after a visible change, then give the preview address to the person. Look at show_changes, then push_changes to save the work on
-dev; propose_release when the person wants it in production.
+dev. Production is built from the default branch, never from dev: an edit reaches it only through
+propose_release, which opens the proposal from dev, under the rule the person chose. Say so when
+you give the production address.
 
 The preview is private: its address opens for the person signed in to Pono. To show it to someone
 else (a client, a friend), share_preview gives a link that lasts the hours chosen. Before a risky
@@ -1062,11 +1069,15 @@ function buildServer(deps: McpDeps, actor: Actor, scope: 'read' | 'act'): McpSer
     'propose_release',
     {
       description:
-        "Evaluates a project's open proposals; what ships next follows the project's mode, chosen by the person.",
+        "Proposes what was pushed to `dev` for production (opens the proposal dev → production branch, or finds it), then evaluates the project's open proposals: what ships next follows the project's mode, chosen by the person. Production shows an edit only once it ships. A proposal refused only for its preview is building at the hosting: call again in a minute.",
       inputSchema: { projectId: z.string() },
       annotations: act,
     },
-    async ({ projectId }) => acting(() => evaluateReleases(deps, actor, projectId)),
+    async ({ projectId }) =>
+      acting(async () => ({
+        proposal: await proposeFromDev(deps, actor, projectId),
+        releases: await evaluateReleases(deps, actor, projectId),
+      })),
   );
 
   server.registerTool(

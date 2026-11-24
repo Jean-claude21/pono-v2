@@ -72,6 +72,15 @@ export interface CodeHost {
       files: Record<string, string>;
     },
   ): Promise<{ number: number; url: string }>;
+  /**
+   * Opens the proposal from a branch already pushed (`dev`) towards `base`, or answers the one
+   * open; null when the branch holds nothing `base` lacks (D-039).
+   */
+  openProposal?(
+    credential: string,
+    fullName: string,
+    input: { base: string; branch: string; title: string; body: string },
+  ): Promise<{ number: number; url: string } | null>;
   /** The `pono/release` status on a commit: the code host blocks the merge on it. */
   setReleaseStatus(
     credential: string,
@@ -130,9 +139,18 @@ export interface Hosting {
   newDeployKey?(credential: string): Promise<{ id: string; publicKey: string }>;
   createSite?(
     credential: string,
-    input: { name: string; gitUrl: string; branch: string; deployKeyId: string },
+    input: {
+      name: string;
+      gitUrl: string;
+      branch: string;
+      deployKeyId: string;
+      /** Branches also built, as previews: `dev`, which proposals come from (D-039). */
+      previewBranches: string[];
+    },
   ): Promise<{ site: HostedSite; pushHookUrl: string | null }>;
   startBuild?(credential: string, ref: string): Promise<void>;
+  /** Builds a branch already pushed as a preview, at its head (D-039): `dev`, before any push. */
+  buildBranch?(credential: string, ref: string, branch: string): Promise<void>;
 }
 
 export interface Database {

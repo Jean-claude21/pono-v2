@@ -316,6 +316,29 @@ export function githubCodeHost(fetchImpl: Fetch): CodeHost & Connectable {
       });
       return { number: pull.number, url: pull.html_url };
     },
+    async openProposal(token, fullName, input) {
+      const [owner] = fullName.split('/');
+      const open = await fetchJson<{ number: number; html_url: string }[]>(fetchImpl, {
+        provider: ID,
+        url: `${API}/repos/${fullName}/pulls?state=open&base=${encodeURIComponent(input.base)}&head=${owner}:${encodeURIComponent(input.branch)}`,
+        headers: headers(token),
+      });
+      if (open[0]) return { number: open[0].number, url: open[0].html_url };
+      try {
+        const pull = await fetchJson<{ number: number; html_url: string }>(fetchImpl, {
+          provider: ID,
+          url: `${API}/repos/${fullName}/pulls`,
+          method: 'POST',
+          headers: headers(token),
+          body: { title: input.title, body: input.body, head: input.branch, base: input.base },
+        });
+        return { number: pull.number, url: pull.html_url };
+      } catch (error) {
+        // « No commits between »: the branch holds nothing new, or does not exist.
+        if (error instanceof ProviderError && error.status === 422) return null;
+        throw error;
+      }
+    },
     async setReleaseStatus(token, fullName, sha, state, description) {
       await fetchJson(fetchImpl, {
         provider: ID,

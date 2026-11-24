@@ -126,6 +126,8 @@ export function netlifyHosting(
             repo_url: input.gitUrl,
             repo_branch: input.branch,
             deploy_key_id: input.deployKeyId,
+            // A push to dev builds a branch deploy: the preview a proposal's guard reads (D-039).
+            allowed_branches: [input.branch, ...input.previewBranches],
           },
         },
       });
@@ -138,6 +140,18 @@ export function netlifyHosting(
         method: 'POST',
         headers: headers(token),
       });
+    },
+    async buildBranch(token, ref, branch) {
+      // A build hook bound to the branch builds its head as a branch deploy.
+      const hook = await fetchJson<{ url: string }>(fetchImpl, {
+        provider: ID,
+        url: `${API}/sites/${ref}/build_hooks`,
+        method: 'POST',
+        headers: headers(token),
+        body: { title: `pono ${branch}`, branch },
+      });
+      const r = await fetchImpl(hook.url, { method: 'POST' });
+      if (!r.ok) throw new ProviderError(ID, r.status, 'build hook refused');
     },
     async findSite(token, repository) {
       const sites = await fetchJson<SiteAnswer[]>(fetchImpl, {

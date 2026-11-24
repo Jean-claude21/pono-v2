@@ -36,9 +36,12 @@ describe('putting a project online (D-037)', () => {
     expect(body).toMatchObject({ created: true, provider: 'host' });
     expect(body.productionUrl).toMatch(/\.host\.test$/);
     expect(t.world.keys.some((k) => k.includes(p.name))).toBe(true);
+    expect([...t.world.previewBranches.values()].at(-1)).toEqual(['dev']);
+    expect(t.world.branchBuilds.at(-1)).toMatch(/@dev$/);
     expect(t.world.hooks.some((h) => h.includes(p.name))).toBe(true);
     const project = await (await call(t, p.cookie, `/v1/projects/${p.projectId}`)).json();
     expect(project.project?.productionUrl ?? project.productionUrl).toBe(body.productionUrl);
+    expect(project.project?.linkStatus ?? project.linkStatus).toBe('unknown');
 
     const again = await (
       await call(t, p.cookie, `/v1/projects/${p.projectId}/online`, { method: 'POST' })

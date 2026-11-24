@@ -160,6 +160,23 @@ export function previewGuard(
 }
 
 /**
+ * Whether an evaluation was refused only because the preview was not built yet (D-039): the
+ * hosting builds it a minute after the push, so that head is evaluated again, not refused for good.
+ */
+export function waitedForPreview(evaluation: { verdict: string; guards: GuardResult[] }): boolean {
+  const failed = evaluation.guards.filter((g) => !g.passed);
+  return (
+    evaluation.verdict === 'refused' &&
+    failed.length > 0 &&
+    failed.every(
+      (g) =>
+        g.guard === 'preview' &&
+        g.findings.every((f) => f.code === 'preview.missing' || f.code === 'preview.building'),
+    )
+  );
+}
+
+/**
  * The destructions declared in `pono.yaml` (`release.declared_destructions`). A file that does not
  * read as a manifest declares nothing: the guard then refuses every destruction.
  */
