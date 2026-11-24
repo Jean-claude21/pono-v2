@@ -492,3 +492,24 @@ règle du projet. **Ce que ça coûte** : l'application GitHub de Pono doit avoi
 **Prouvé** (`apps/api/scripts/template-live.ts`, 2 minutes) : template « site » lancé, serveur
 `pono-web` prêt en 12 s, dev et preview privée, site Netlify créé, production qui répond, valeur du
 template comptée.
+
+## D-038 — L'agent voit ce qu'il construit
+
+**Tranché le 2026-11-23.**
+
+Vu sur un vrai projet codé depuis ChatGPT : l'agent ne pouvait ni voir la preview (il vérifiait
+avec `curl`), ni compter sur le rechargement (son petit serveur Node lisait les fichiers une fois).
+
+- `preview_screenshot` : le navigateur du serveur (gabarit `pono-web`) capture une page de la
+  preview, sur ordinateur ou téléphone, et la renvoie en image au chat, avec la réponse de la page
+  et les erreurs de sa console. Un serveur d'avant le gabarit le dit, sans rien casser.
+- Un serveur de dev en `node …` tourne sous `node --watch` ; `dev_status` dit `reloads`, et l'agent
+  ne promet le rechargement que s'il est vrai.
+- Le rafraîchissement périodique n'écrit au journal que ce qui change (844 lignes identiques en neuf
+  jours sur un seul projet).
+- La création d'un serveur attend jusqu'à deux minutes : le gabarit, plus lourd, peut démarrer
+  lentement sur une machine froide. Playwright pour Python va dans le Python du système : le
+  `~/.venv` du serveur le masquait.
+
+**Prouvé** (`apps/api/scripts/eyes-live.ts`) sur un serveur `pono-web` neuf : une modification
+servie sans redémarrage, une capture JPEG reçue, l'erreur de console rapportée.

@@ -328,3 +328,68 @@ describe('the dev loop through Pono', () => {
     );
   });
 });
+
+describe('the agent sees what it builds (D-038)', () => {
+  it('runs a plain Node server under --watch, and says when the preview follows the files', async () => {
+    const { watching, reloads } = await import('../src/features/devloop/domain.js');
+    expect(watching('node server.mjs')).toBe('node --watch server.mjs');
+    expect(watching('node --watch server.mjs')).toBe('node --watch server.mjs');
+    expect(watching('npx --yes pnpm@10 dev')).toBe('npx --yes pnpm@10 dev');
+    expect(reloads('node --watch server.mjs')).toBe(true);
+    expect(reloads('npx --yes pnpm@10 run dev --host 0.0.0.0')).toBe(true);
+    expect(reloads('vite --port 3000')).toBe(true);
+    expect(reloads('python3 -m http.server 3000')).toBe(false);
+    expect(reloads(null)).toBe(false);
+  });
+
+  it('reads a capture of the preview, its answer and console errors; says when there is no browser', async () => {
+    const { readShot, shotCommand, PREVIEW_PATH } = await import('../src/features/devloop/shot.js');
+    const img = Buffer.from('jpeg-bytes').toString('base64');
+    expect(
+      readShot(`noise\n<<<meta>>>{"status":200,"errors":["boom"]}\n<<<shot>>>${img}\n`),
+    ).toEqual({ ok: true, image: img, status: 200, errors: ['boom'] });
+    expect(readShot('<<<shot>>>no_browser\n')).toEqual({ ok: false, reason: 'no_browser' });
+    expect(readShot('Traceback…')).toEqual({ ok: false, reason: 'no_answer' });
+    expect(shotCommand({ port: 3000, path: '/blog', device: 'mobile' })).toContain(
+      '"url":"http://127.0.0.1:3000/blog","width":390',
+    );
+    expect(PREVIEW_PATH.test('/a/b?x=1')).toBe(true);
+    expect(PREVIEW_PATH.test('http://evil.test')).toBe(false);
+    expect(PREVIEW_PATH.test("/'; rm -rf /")).toBe(false);
+  });
+
+  it('captures through the API, and refuses a path that leaves the site', async () => {
+    const p = await withServer();
+    const img = Buffer.from('jpeg').toString('base64');
+    t.world.shell = (command) =>
+      command.includes('<<<files>>>')
+        ? prepared('version: 1\nname: x\ndev:\n  command: node server.mjs\n  port: 4000\n')
+        : command.includes('/usr/bin/python3 -c')
+          ? {
+              exitCode: 0,
+              stdout: `<<<meta>>>{"status":200,"errors":[]}\n<<<shot>>>${img}\n`,
+              stderr: '',
+            }
+          : { exitCode: 0, stdout: '', stderr: '' };
+    await call(t, p.cookie, `/v1/projects/${p.id}/dev/start`, { method: 'POST' });
+    const start = t.world.commands.filter((c) => c.background).pop()!;
+    expect(start.command).toContain('node --watch server.mjs');
+    const { previewShot } = await import('../src/features/devloop/index.js');
+    const me = await (await call(t, p.cookie, '/v1/me')).json();
+    const actor = {
+      personId: me.person.id,
+      organizationId: me.organization.id,
+      login: me.person.login,
+      name: null,
+      channel: 'mcp' as const,
+    };
+    const shot = await previewShot(t.deps as never, actor as never, p.id, {
+      path: '/',
+      device: 'desktop',
+    });
+    expect(shot).toMatchObject({ image: img, status: 200, errors: [] });
+    await expect(
+      previewShot(t.deps as never, actor as never, p.id, { path: 'http://x', device: 'desktop' }),
+    ).rejects.toMatchObject({ code: 'preview.bad_path' });
+  });
+});

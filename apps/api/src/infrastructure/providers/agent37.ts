@@ -112,17 +112,23 @@ export function agent37Host(options: {
   return {
     id: ID,
     async create(input: CreateServer) {
-      const answer = await call<InstanceAnswer>('/instances', 'POST', {
-        template: templateOf(input.agent),
-        resources: RESOURCES,
-        region: options.region ?? 'us',
-        name: input.name.slice(0, 64),
-        metadata: input.metadata,
-        env: input.env,
-        budget: { monthly_cap_micros: input.budgetMicros },
-        auto_sleep: true,
-        idle_timeout_seconds: input.idleSeconds,
-      });
+      const answer = await call<InstanceAnswer>(
+        '/instances',
+        'POST',
+        {
+          template: templateOf(input.agent),
+          resources: RESOURCES,
+          region: options.region ?? 'us',
+          name: input.name.slice(0, 64),
+          metadata: input.metadata,
+          env: input.env,
+          budget: { monthly_cap_micros: input.budgetMicros },
+          auto_sleep: true,
+          idle_timeout_seconds: input.idleSeconds,
+          // A larger template (Pono's, with its browser) can take a minute on a cold machine.
+        },
+        120_000,
+      );
       return { ...hosted(answer), monthlyMicros: hosted(answer).monthlyMicros || MONTHLY_MICROS };
     },
     async get(externalId) {

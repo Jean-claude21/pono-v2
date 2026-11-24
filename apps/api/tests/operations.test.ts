@@ -124,13 +124,18 @@ describe('Pono’s periodic task (D-018)', () => {
     const p = await autoMerged();
     const report = await cycle([p.org]);
     expect(report).toMatchObject({ organizations: 1, projects: 1, rolledBack: 0 });
-    const detail = await (await call(t, p.cookie, `/v1/projects/${p.id}`)).json();
-    expect(
-      detail.journal.some(
+    // The periodic reading journals a refresh only when something changed (D-038).
+    const systemRefreshes = async () =>
+      (await (await call(t, p.cookie, `/v1/projects/${p.id}`)).json()).journal.filter(
         (j: { action: string; channel: string }) =>
           j.action === 'project.refreshed' && j.channel === 'system',
-      ),
-    ).toBe(true);
+      ).length;
+    const before = await systemRefreshes();
+    await cycle([p.org]);
+    expect(await systemRefreshes()).toBe(before);
+    t.world.links.set(p.url, 'down');
+    await cycle([p.org]);
+    expect(await systemRefreshes()).toBe(before + 1);
   });
 });
 

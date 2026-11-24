@@ -165,6 +165,9 @@ interface ProjectRow {
   hosting_ref: string | null;
   production_url: string | null;
   last_commit_at: Date | null;
+  state: string;
+  state_reason: string | null;
+  link_status: string;
 }
 
 /** Reads the project again at its providers, then writes its state (US4). */
@@ -175,7 +178,7 @@ export async function refreshProject(
 ): Promise<void> {
   const project = await withOrganization(deps.pool, actor.organizationId, async (client) => {
     const { rows } = await client.query<ProjectRow>(
-      'SELECT id, repository, hosting_provider, hosting_ref, production_url, last_commit_at FROM projects WHERE id = $1',
+      'SELECT id, repository, hosting_provider, hosting_ref, production_url, last_commit_at, state, state_reason, link_status FROM projects WHERE id = $1',
       [projectId],
     );
     return rows[0];
@@ -228,6 +231,10 @@ export async function refreshProject(
       [projectId, productionUrl, link, lastCommitAt, state, reason],
     );
     await saveDeployments(client, actor.organizationId, projectId, deployments);
+    // The periodic reading journals only what changed: a person's own refresh always shows.
+    const changed =
+      state !== project.state || reason !== project.state_reason || link !== project.link_status;
+    if (actor.channel === 'system' && !changed) return;
     await record(client, {
       organizationId: actor.organizationId,
       projectId,

@@ -25,6 +25,26 @@ const PONO = '.pono';
  * How the project runs in development: `dev:` in pono.yaml first; otherwise read from package.json
  * (its `dev` script, its package manager by lockfile, its port). Null when nothing says it.
  */
+/**
+ * A plain Node server reads its files once (D-038): run under `node --watch`, it restarts by
+ * itself when one changes, like a framework's dev server does.
+ */
+export function watching(command: string): string {
+  return /^node\s/.test(command) && !/--watch\b/.test(command)
+    ? command.replace(/^node\s+/, 'node --watch ')
+    : command;
+}
+
+/** Whether the preview follows file changes by itself, or needs start_dev again (D-038). */
+export function reloads(command: string | null): boolean {
+  return Boolean(
+    command &&
+    /\b(vite|next|nuxt|astro|remix|svelte-kit|webpack-dev-server|nodemon|tsx watch|run dev)\b|--watch\b/.test(
+      command,
+    ),
+  );
+}
+
 export function devPlan(input: {
   manifestDev?: { install?: string | undefined; command: string; port: number } | undefined;
   packageJson: string | null;
@@ -33,7 +53,7 @@ export function devPlan(input: {
   if (input.manifestDev)
     return {
       install: input.manifestDev.install ?? null,
-      command: input.manifestDev.command,
+      command: watching(input.manifestDev.command),
       port: input.manifestDev.port,
     };
   if (!input.packageJson) return null;
