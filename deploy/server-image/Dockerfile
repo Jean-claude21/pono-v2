@@ -21,9 +21,13 @@ RUN npm install -g pnpm@10.20.0 \
 RUN uv tool install specify-cli --from git+https://github.com/github/spec-kit.git@v0.16.0 \
  && chmod -R a+rX /opt/uv-tools
 
-# A browser for the agent's tests and screenshots of the preview.
+# A browser for the agent's tests and screenshots of the preview. Python's Playwright goes to the
+# system Python: the server's own venv (~/.venv) lives on its disk, masked at runtime. The import
+# is checked here, so that a broken image never builds.
 RUN npx --yes playwright@1.56.1 install --with-deps chromium \
+ && /usr/bin/python3 -m pip install --no-cache-dir --break-system-packages playwright==1.56.0 \
+ && /usr/bin/python3 -c "import playwright.sync_api" \
  && chmod -R a+rX /opt/ms-playwright
 
-RUN mkdir -p /usr/local/share/pono && echo "pono-web 2" > /usr/local/share/pono/version
+RUN mkdir -p /usr/local/share/pono && echo "pono-web 4" > /usr/local/share/pono/version
 USER node

@@ -119,7 +119,8 @@ describe('usage through the API', () => {
   });
 
   it('counts a declared subscription in the month, and ends it', async () => {
-    const renewsOn = new Date(Date.now() + 3 * 86_400_000).toISOString().slice(0, 10);
+    // Three days after the app's own clock, not the machine's: the test must not age.
+    const renewsOn = new Date(t.now.value.getTime() + 3 * 86_400_000).toISOString().slice(0, 10);
     const res = await call(t, cookie, '/v1/subscriptions', {
       method: 'POST',
       body: { service: 'Claude Max', priceUsd: 100, cycle: 'month', renewsOn },

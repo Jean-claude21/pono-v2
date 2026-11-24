@@ -17,6 +17,7 @@ import {
   readPrepared,
   readStatus,
   redact,
+  reloads,
   stagedCommand,
   startCommand,
   statusCommand,
@@ -39,6 +40,8 @@ import {
 
 export * from './domain.js';
 export * from './code.js';
+export * from './shot.js';
+import { PREVIEW_PATH, readShot, shotCommand, type Device } from './shot.js';
 
 export type DevLoopDeps = ProjectsDeps &
   ServersDeps & {
@@ -64,6 +67,7 @@ interface Target {
   externalId: string;
   status: string;
   devPort: number | null;
+  devCommand: string | null;
   previewUrl: string | null;
   values: string[];
 }
@@ -80,9 +84,10 @@ async function target(deps: DevLoopDeps, actor: Actor, projectId: string): Promi
       external_id: string | null;
       status: string | null;
       dev_port: number | null;
+      dev_command: string | null;
       preview_url: string | null;
     }>(
-      `SELECT p.repository, p.default_branch, s.id AS server_id, s.external_id, s.status, s.dev_port, s.preview_url
+      `SELECT p.repository, p.default_branch, s.id AS server_id, s.external_id, s.status, s.dev_port, s.dev_command, s.preview_url
        FROM projects p LEFT JOIN project_servers s ON s.project_id = p.id AND s.status <> 'released'
        WHERE p.id = $1`,
       [projectId],
@@ -107,6 +112,7 @@ async function target(deps: DevLoopDeps, actor: Actor, projectId: string): Promi
       externalId: row.external_id,
       status: row.status,
       devPort: row.dev_port,
+      devCommand: row.dev_command,
       previewUrl: row.preview_url,
       values: sealed.rows.flatMap((v) => deps.sealer.open(v.sealed_value) ?? []),
     };
@@ -145,6 +151,8 @@ async function journal(
 
 export interface DevView extends DevState {
   previewUrl: string | null;
+  /** true when the dev server follows file changes; false: call start_dev again after a change. */
+  reloads?: boolean;
   /** true when the preview opens only through Pono, or by a link shared for a while (D-031). */
   private?: boolean;
   port: number | null;
@@ -266,6 +274,7 @@ export async function devStatus(
     ...state,
     logs: redact(state.logs, t.values),
     previewUrl: privatePreviews(deps) ? previewEntry(deps, projectId) : t.previewUrl,
+    reloads: reloads(t.devCommand),
     ...(privatePreviews(deps) ? { private: true } : {}),
     port: t.devPort,
     ...(health
@@ -534,4 +543,51 @@ export function devRoutes(deps: DevLoopDeps): Hono<AppEnv> {
       if (!body.success) throw new AppError('request.invalid', 400, 'Expected hours, 1 to 168.');
       return c.json(await previewLink(deps, c.var.actor, c.req.param('id'), body.data.hours));
     });
+}
+
+/**
+ * The preview as the agent sees it (D-038): a capture of a page of the dev server, taken on the
+ * project's server, with the page's answer and its console errors. Development values are hidden
+ * from the errors like from the logs.
+ */
+export async function previewShot(
+  deps: DevLoopDeps,
+  actor: Actor,
+  projectId: string,
+  input: { path: string; device: Device },
+): Promise<{
+  image: string;
+  status: number | null;
+  errors: string[];
+  path: string;
+  device: Device;
+}> {
+  if (!PREVIEW_PATH.test(input.path))
+    throw new AppError('preview.bad_path', 400, 'Give a path of the site, starting with /.');
+  const t = await target(deps, actor, projectId);
+  if (!t.devPort)
+    throw new AppError('dev.no_preview', 404, 'No preview yet: call start_dev first.');
+  const out = await deps.serverHost.run(
+    t.externalId,
+    shotCommand({ port: t.devPort, path: input.path, device: input.device }),
+    { timeoutMs: 90_000 },
+  );
+  const shot = readShot(out.stdout);
+  if (!shot.ok && shot.reason === 'no_browser')
+    throw new AppError(
+      'preview.no_browser',
+      501,
+      'This server has no browser: it was made before the Pono server template. Read the page with run_command (curl) instead, or ask the person to give the project a new server.',
+    );
+  if (!shot.ok)
+    throw new AppError('preview.no_capture', 502, 'The capture failed.', {
+      output: redact(out.stderr, t.values).slice(-800),
+    });
+  return {
+    image: shot.image,
+    status: shot.status,
+    errors: shot.errors.map((e) => redact(e, t.values)),
+    path: input.path,
+    device: input.device,
+  };
 }

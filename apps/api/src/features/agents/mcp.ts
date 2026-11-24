@@ -24,6 +24,7 @@ import {
   jobOutput,
   LIMITS,
   previewLink,
+  previewShot,
   pullChanges,
   pushChanges,
   runOn,
@@ -72,8 +73,10 @@ on the dev branch. Call start_dev once (it answers the preview address), then wo
 project_map, list_files, search_code, read_file, edit_file (or apply_patch for several files),
 write_file and run_command. Read a file before you edit it: edit_file needs old_text as read. An
 edit that breaks a file's syntax is refused; after a change, devServer shows the dev server's
-errors: fix them before going on. undo_edit puts a file back. The preview reloads by itself: give its address
-to the person after a visible change. Look at show_changes, then push_changes to save the work on
+errors: fix them before going on. undo_edit puts a file back. When dev_status says reloads: true the
+preview follows the files by itself; otherwise call start_dev again after a change. You can see the
+page yourself: preview_screenshot returns a capture (desktop or mobile) and the console errors.
+Look at it after a visible change, then give the preview address to the person. Look at show_changes, then push_changes to save the work on
 dev; propose_release when the person wants it in production.
 
 The preview is private: its address opens for the person signed in to Pono. To show it to someone
@@ -440,6 +443,45 @@ function buildServer(deps: McpDeps, actor: Actor, scope: 'read' | 'act'): McpSer
       annotations: act,
     },
     async ({ projectId }) => acting(() => putOnline(deps, actor, projectId)),
+  );
+
+  server.registerTool(
+    'preview_screenshot',
+    {
+      description:
+        "A capture of a page of the project's preview, taken by the browser on its server, as an image you can look at, with the page's HTTP answer and its console errors. Use it after a visible change to check what the person will see (device mobile for a phone).",
+      inputSchema: {
+        ...project,
+        path: z.string().max(300).default('/'),
+        device: z.enum(['desktop', 'mobile']).default('desktop'),
+      },
+      annotations: read,
+    },
+    async ({ projectId, path, device }) => {
+      try {
+        const shot = await previewShot(deps, actor, projectId, { path, device });
+        return {
+          content: [
+            { type: 'image' as const, data: shot.image, mimeType: 'image/jpeg' },
+            {
+              type: 'text' as const,
+              text: JSON.stringify(
+                {
+                  path: shot.path,
+                  device: shot.device,
+                  status: shot.status,
+                  consoleErrors: shot.errors,
+                },
+                null,
+                2,
+              ),
+            },
+          ],
+        };
+      } catch (error) {
+        return guard(() => Promise.reject(error));
+      }
+    },
   );
 
   server.registerTool(
