@@ -16,6 +16,15 @@ export const Route = createFileRoute('/settings')({
   ),
 });
 
+/** The country of the browser's language (fr-CI → CI), a first guess for the phone's country. */
+function region(): string {
+  if (typeof navigator === 'undefined') return '';
+  const found = navigator.languages
+    .map((l) => l.split('-')[1])
+    .find((r) => r && /^[A-Za-z]{2}$/.test(r));
+  return found?.toUpperCase() ?? '';
+}
+
 interface PlanView {
   plan: string;
   provider: string;
@@ -37,6 +46,7 @@ function Settings() {
   const me = useApi<{ person: { level: Level | null } }>('/v1/me');
   const [error, setError] = useState<string | null>(null);
   const [redeemed, setRedeemed] = useState<string | null>(null);
+  const [buying, setBuying] = useState<string | null>(null);
   if (!data.result) return <p className="mute">{m.loading()}</p>;
   if (!data.result.ok) return <p className="notice">{label('error', data.result.error.code)}</p>;
   const { plan, plans, provider, licences, storeUrl, contactUrl } = data.result.data;
@@ -59,13 +69,23 @@ function Settings() {
     data.reload();
   };
 
-  const choose = async (id: string) => {
+  const choose = async (id: string, contact?: { phone: string; country: string }) => {
     const result = await api<{ url: string }>('/v1/plan/checkout', {
       method: 'POST',
-      body: { plan: id },
+      body: { plan: id, ...contact },
     });
     if (!result.ok) return setError(label('error', result.error.code));
     window.location.assign(result.data.url);
+  };
+
+  // A plan sold at the store: its payment page needs a phone (mobile money), asked once here.
+  const buy = async (id: string, e: FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    const f = new FormData(e.currentTarget);
+    await choose(id, {
+      phone: String(f.get('phone') ?? '').trim(),
+      country: String(f.get('country') ?? '').trim(),
+    });
   };
 
   return (
@@ -102,7 +122,46 @@ function Settings() {
                 )
               ) : (
                 p.availability === 'available' &&
-                p.priceMicros > 0 && (
+                p.priceMicros > 0 &&
+                (p.byLicence ? (
+                  buying === p.id ? (
+                    <form className="form" onSubmit={(e) => buy(p.id, e)}>
+                      <div className="field">
+                        <label htmlFor={`phone-${p.id}`}>{m.settings_buy_phone()}</label>
+                        <div className="row">
+                          <input
+                            name="country"
+                            aria-label={m.settings_buy_country()}
+                            required
+                            maxLength={2}
+                            pattern="[A-Za-z]{2}"
+                            defaultValue={region()}
+                            style={{ width: 56 }}
+                          />
+                          <input
+                            id={`phone-${p.id}`}
+                            name="phone"
+                            type="tel"
+                            required
+                            autoComplete="tel"
+                            pattern="\+?[0-9 ]{6,20}"
+                          />
+                        </div>
+                      </div>
+                      <button type="submit" className="btn btn-primary btn-sm">
+                        {m.settings_buy_go()}
+                      </button>
+                    </form>
+                  ) : (
+                    <button
+                      type="button"
+                      className="btn btn-primary btn-sm"
+                      onClick={() => setBuying(p.id)}
+                    >
+                      {m.settings_choose()}
+                    </button>
+                  )
+                ) : (
                   <button
                     type="button"
                     className="btn btn-primary btn-sm"
@@ -111,7 +170,7 @@ function Settings() {
                   >
                     {m.settings_choose()}
                   </button>
-                )
+                ))
               )}
             </div>
           ))}

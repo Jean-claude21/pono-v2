@@ -6,7 +6,7 @@ import { AppError } from '../../platform/errors.js';
 import type { Sealer } from '../../platform/secrets.js';
 import { readOffers, setting } from '../offers/index.js';
 import { planOf, type Plan } from '../servers/index.js';
-import { redeemLicence, type LicenceProvider } from './licences.js';
+import { licenceCheckout, redeemLicence, storeEvent, type LicenceProvider } from './licences.js';
 
 /** Where a plan is paid. The id is an opaque adapter id. */
 export interface BillingProvider {
@@ -71,7 +71,20 @@ export function planRoutes(deps: BillingDeps): Hono<AppEnv> {
       if (actor.channel !== 'console')
         throw new AppError('plan.person_only', 403, 'Only a person changes the plan.');
       const body = z
-        .object({ plan: z.enum(['solo', 'pro']) })
+        .object({
+          plan: z.enum(['solo', 'pro']),
+          // The store's payment page asks a phone (mobile money): given once here (D-043).
+          phone: z
+            .string()
+            .trim()
+            .regex(/^\+?[0-9 ]{6,20}$/)
+            .optional(),
+          country: z
+            .string()
+            .trim()
+            .regex(/^[A-Za-z]{2}$/)
+            .optional(),
+        })
         .safeParse(await c.req.json().catch(() => null));
       if (!body.success) throw new AppError('request.invalid', 400, 'Expected a paid plan.');
       const offer = (await readOffers(deps.pool)).find((o) => o.plan === body.data.plan)!;
@@ -86,6 +99,27 @@ export function planRoutes(deps: BillingDeps): Hono<AppEnv> {
         );
         return rows[0]?.email ?? null;
       });
+      // A plan tied to a licence product is paid at the store; the rest happens by its Pulse.
+      if (offer.licenceProduct && deps.licences && (await setting(deps, 'chariow.api_key'))) {
+        if (!email)
+          throw new AppError('plan.email_needed', 409, 'Your account has no email address.');
+        if (!body.data.phone || !body.data.country)
+          throw new AppError('plan.phone_needed', 400, 'The payment page needs a phone number.');
+        const [first, ...rest] = (actor.name ?? email.split('@')[0]!).trim().split(/\s+/);
+        const url = await licenceCheckout(deps, {
+          organizationId: actor.organizationId,
+          offer,
+          buyer: {
+            email,
+            firstName: first || email,
+            lastName: rest.join(' ') || first || email,
+            phone: body.data.phone.replace(/[^0-9]/g, ''),
+            country: body.data.country.toUpperCase(),
+          },
+          returnUrl: `${deps.publicUrl}/settings?plan=paid`,
+        });
+        return c.json({ url });
+      }
       const url = await deps.billing.checkout({
         organizationId: actor.organizationId,
         plan: body.data.plan,
@@ -107,38 +141,50 @@ export function planRoutes(deps: BillingDeps): Hono<AppEnv> {
 
 /** `/billing/webhook`: the provider says a plan was paid or ended; nothing else changes a plan. */
 export function billingWebhook(deps: BillingDeps): Hono<AppEnv> {
-  return new Hono<AppEnv>().post('/webhook', async (c) => {
-    const raw = await c.req.text();
-    let event;
-    try {
-      event = await deps.billing.event(
-        raw,
-        c.req.header('stripe-signature') ??
-          c.req.header('x-moneroo-signature') ??
-          c.req.header('x-pono-signature'),
-      );
-    } catch {
-      throw new AppError(
-        'billing.bad_signature',
-        400,
-        'This event is not signed by the billing provider.',
-      );
-    }
-    if (event?.payment)
-      // Once per payment, whatever the provider retries: the plan runs `days` more.
-      await deps.pool.query('SELECT pay_organization_plan($1, $2, $3, $4, $5)', [
-        event.organizationId,
-        event.plan,
-        event.customer,
-        event.payment.id,
-        event.payment.days,
-      ]);
-    else if (event)
-      await deps.pool.query('SELECT set_organization_plan($1, $2, $3)', [
-        event.organizationId,
-        event.plan,
-        event.customer,
-      ]);
-    return c.json({ received: true });
-  });
+  return (
+    new Hono<AppEnv>()
+      // The store's Pulses (D-043): a sale of a plan's licence product turns the plan on.
+      .post('/chariow', async (c) => {
+        const result = await storeEvent(deps, {
+          rawBody: await c.req.text(),
+          signature: c.req.header('x-chariow-signature'),
+          delivery: c.req.header('x-pulse-delivery-id'),
+        });
+        return c.json({ received: true, result });
+      })
+      .post('/webhook', async (c) => {
+        const raw = await c.req.text();
+        let event;
+        try {
+          event = await deps.billing.event(
+            raw,
+            c.req.header('stripe-signature') ??
+              c.req.header('x-moneroo-signature') ??
+              c.req.header('x-pono-signature'),
+          );
+        } catch {
+          throw new AppError(
+            'billing.bad_signature',
+            400,
+            'This event is not signed by the billing provider.',
+          );
+        }
+        if (event?.payment)
+          // Once per payment, whatever the provider retries: the plan runs `days` more.
+          await deps.pool.query('SELECT pay_organization_plan($1, $2, $3, $4, $5)', [
+            event.organizationId,
+            event.plan,
+            event.customer,
+            event.payment.id,
+            event.payment.days,
+          ]);
+        else if (event)
+          await deps.pool.query('SELECT set_organization_plan($1, $2, $3)', [
+            event.organizationId,
+            event.plan,
+            event.customer,
+          ]);
+        return c.json({ received: true });
+      })
+  );
 }

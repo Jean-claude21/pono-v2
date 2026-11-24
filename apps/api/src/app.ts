@@ -51,6 +51,8 @@ export interface AppDeps {
   /** Plans sold as licence keys (D-041), and the environment's values of the operator's settings. */
   licences?: LicenceProvider;
   settingsEnv?: Partial<Record<string, string>>;
+  /** Waits between reads of a licence not listed yet (tests: none). */
+  wait?: (ms: number) => Promise<void>;
   /** Where projects' visits are counted (D-017): Umami, PostHog. */
   analytics?: SiteAnalytics[];
   admins: string[];

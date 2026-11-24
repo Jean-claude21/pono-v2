@@ -28,6 +28,7 @@ interface Products {
 
 const SETTING_LABELS: Record<string, () => string> = {
   'chariow.api_key': m.admin_setting_chariow_key,
+  'chariow.pulse_secret': m.admin_setting_chariow_pulse,
   'chariow.store_url': m.admin_setting_chariow_store,
   'sales.contact_url': m.admin_setting_contact,
 };
@@ -190,6 +191,12 @@ export function AdminOffers() {
             })}
           </p>
         )}
+        <p className="small soft mt-sm">
+          {m.admin_pulse_where()}{' '}
+          <code className="figures">
+            {typeof window === 'undefined' ? '' : `${window.location.origin}/billing/chariow`}
+          </code>
+        </p>
         {keySet && products.result?.ok && licenceProducts.length === 0 && (
           <p className="notice warning">{m.admin_store_no_licence()}</p>
         )}

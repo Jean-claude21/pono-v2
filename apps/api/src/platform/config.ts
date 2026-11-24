@@ -29,6 +29,7 @@ const schema = z.object({
   MONEROO_SECRET_KEY: z.string().min(1).optional(),
   // Plans sold as licence keys (D-041); the admin console can set them instead.
   CHARIOW_API_KEY: z.string().min(1).optional(),
+  CHARIOW_PULSE_SECRET: z.string().min(1).optional(),
   CHARIOW_STORE_URL: z.string().url().optional(),
   PONO_SALES_CONTACT_URL: z.string().min(1).optional(),
   MONEROO_WEBHOOK_SECRET: z.string().min(1).optional(),
