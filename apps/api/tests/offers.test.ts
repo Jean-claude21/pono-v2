@@ -18,7 +18,7 @@ afterAll(async () => {
     method: 'PUT',
     body: { availability: 'available', priceMicros: 12_000_000, activeServers: 3 },
   });
-  for (const key of ['chariow.api_key', 'sales.contact_url'])
+  for (const key of ['chariow.api_key', 'chariow.pulse_secret', 'sales.contact_url'])
     await call(t, operator, `/v1/admin/settings/${key}`, { method: 'PUT', body: { value: '' } });
   await t.pool.end();
 });
@@ -176,5 +176,133 @@ describe('a plan bought as a licence key (D-041)', () => {
         .error?.code;
     expect(await code(revoked)).toBe('licence.inactive');
     expect(await code(other)).toBe('licence.other_product');
+  });
+});
+
+describe('a plan bought at the store, turned on by its Pulse (D-043)', () => {
+  const SECRET = 'whsec_test';
+  const pulse = async (body: unknown, delivery: string, secret = SECRET) => {
+    const raw = JSON.stringify(body);
+    const { createHmac } = await import('node:crypto');
+    const signature = `sha256=${createHmac('sha256', secret).update(raw).digest('hex')}`;
+    return t.app.request('/billing/chariow', {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        'x-chariow-signature': signature,
+        'x-pulse-delivery-id': delivery,
+      },
+      body: raw,
+    });
+  };
+
+  it('sends the person to the store, then activates the licence the sale issued', async () => {
+    for (const [key, value] of [
+      ['chariow.api_key', 'store-key'],
+      ['chariow.pulse_secret', SECRET],
+    ])
+      await call(t, operator, `/v1/admin/settings/${key}`, { method: 'PUT', body: { value } });
+    await call(t, operator, '/v1/admin/offers/solo', {
+      method: 'PUT',
+      body: {
+        availability: 'available',
+        priceMicros: 12_000_000,
+        activeServers: 3,
+        licenceProduct: 'prd_solo',
+        licenceDays: 30,
+      },
+    });
+    const login = `d${randomUUID().slice(0, 8)}`;
+    const dana = await signIn(t, login);
+    const org = (await (await call(t, dana, '/v1/me')).json()).organization.id as string;
+
+    const noPhone = await call(t, dana, '/v1/plan/checkout', {
+      method: 'POST',
+      body: { plan: 'solo' },
+    });
+    expect((await noPhone.json()).error.code).toBe('plan.phone_needed');
+    const checkout = await call(t, dana, '/v1/plan/checkout', {
+      method: 'POST',
+      body: { plan: 'solo', phone: '+225 07 00 00 00 00', country: 'ci' },
+    });
+    expect((await checkout.json()).url).toBe('https://store.test/pay/prd_solo');
+    expect(t.world.checkouts.at(-1)).toMatchObject({
+      productId: 'prd_solo',
+      buyer: { email: `${login}@dev.pono.test`, phone: '2250700000000', country: 'CI' },
+      metadata: { pono_organization: org, pono_plan: 'solo' },
+    });
+
+    // The store: the sale completed, its licence issued to the buyer.
+    const sale = `sal_${randomUUID().slice(0, 8)}`;
+    const key = `BUY-${randomUUID().slice(0, 8)}`;
+    t.world.sales.set(sale, {
+      id: sale,
+      status: 'completed',
+      productId: 'prd_solo',
+      customerEmail: `${login}@dev.pono.test`,
+    });
+    t.world.licences.set(key, {
+      id: `lic_${randomUUID().slice(0, 8)}`,
+      status: 'pending_activation',
+      productId: 'prd_solo',
+      usable: false,
+      expiresAt: null,
+      customerEmail: `${login}@dev.pono.test`,
+    });
+    const event = {
+      event: 'successful.sale',
+      sale: { id: sale, custom_metadata: { pono_organization: org, pono_plan: 'solo' } },
+    };
+    expect((await pulse(event, 'dlv-forged', 'whsec_wrong')).status).toBe(401);
+    const first = await pulse(event, `dlv-${sale}`);
+    expect(await first.json()).toMatchObject({ result: 'granted' });
+    expect(t.world.activations).toContain(`${key}@pono-${org}`);
+    expect((await (await call(t, dana, '/v1/plan')).json()).plan).toBe('solo');
+
+    // A retry of the delivery, another Pulse for the same sale, the key typed by hand: no more days.
+    expect(await (await pulse(event, `dlv-${sale}`)).json()).toMatchObject({ result: 'duplicate' });
+    expect(await (await pulse(event, `dlv2-${sale}`)).json()).toMatchObject({
+      result: 'duplicate',
+    });
+    const typed = await (
+      await call(t, dana, '/v1/plan/licence', { method: 'POST', body: { key } })
+    ).json();
+    expect(typed).toMatchObject({ already: true, days: 0 });
+  });
+
+  it('trusts the store, not the body: an unpaid sale turns nothing on', async () => {
+    const eve = await signIn(t, `e${randomUUID().slice(0, 8)}`);
+    const org = (await (await call(t, eve, '/v1/me')).json()).organization.id as string;
+    const sale = `sal_${randomUUID().slice(0, 8)}`;
+    t.world.sales.set(sale, {
+      id: sale,
+      status: 'awaiting_payment',
+      productId: 'prd_solo',
+      customerEmail: 'eve@example.test',
+    });
+    const answer = await pulse(
+      { event: 'successful.sale', sale: { id: sale, custom_metadata: { pono_organization: org } } },
+      `dlv-${sale}`,
+    );
+    expect(await answer.json()).toMatchObject({ result: 'ignored' });
+    expect((await (await call(t, eve, '/v1/plan')).json()).plan).toBe('free');
+  });
+
+  it('starts the plan for its days when the paid sale has no licence listed yet', async () => {
+    const fay = await signIn(t, `f${randomUUID().slice(0, 8)}`);
+    const org = (await (await call(t, fay, '/v1/me')).json()).organization.id as string;
+    const sale = `sal_${randomUUID().slice(0, 8)}`;
+    t.world.sales.set(sale, {
+      id: sale,
+      status: 'settled',
+      productId: 'prd_solo',
+      customerEmail: 'nobody-yet@example.test',
+    });
+    const answer = await pulse(
+      { event: 'successful.sale', sale: { id: sale, custom_metadata: { pono_organization: org } } },
+      `dlv-${sale}`,
+    );
+    expect(await answer.json()).toMatchObject({ result: 'pending' });
+    expect((await (await call(t, fay, '/v1/plan')).json()).plan).toBe('solo');
   });
 });

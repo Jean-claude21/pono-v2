@@ -170,6 +170,7 @@ const deps: AppDeps = {
   licences: chariowLicences(fetch),
   settingsEnv: {
     ...(config.CHARIOW_API_KEY ? { CHARIOW_API_KEY: config.CHARIOW_API_KEY } : {}),
+    ...(config.CHARIOW_PULSE_SECRET ? { CHARIOW_PULSE_SECRET: config.CHARIOW_PULSE_SECRET } : {}),
     ...(config.CHARIOW_STORE_URL ? { CHARIOW_STORE_URL: config.CHARIOW_STORE_URL } : {}),
     ...(config.PONO_SALES_CONTACT_URL
       ? { PONO_SALES_CONTACT_URL: config.PONO_SALES_CONTACT_URL }
