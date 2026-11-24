@@ -145,6 +145,14 @@ export function agent37Host(options: {
     async wake(externalId) {
       await call(`/instances/${externalId}/start`, 'POST');
     },
+    async monthSpend(now) {
+      // The workspace's usage since the first of the UTC month, by instance (GET /v1/usage).
+      const from = `${now.getUTCFullYear()}-${String(now.getUTCMonth() + 1).padStart(2, '0')}-01`;
+      const usage = await call<{ instances?: { id: string; total_micros: number }[] }>(
+        `/usage?from=${from}`,
+      );
+      return new Map((usage.instances ?? []).map((i) => [i.id, i.total_micros]));
+    },
     publicHostSuffix: '.agent37.app',
     async run(externalId, command, runOptions) {
       const answer = await call<{ exit_code: number; stdout: string; stderr: string }>(

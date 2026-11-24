@@ -537,3 +537,23 @@ lancé, dev, capture, modification suivie sans redémarrage, poussée, mise en l
 ouverte depuis `dev`, réévaluée une fois l'aperçu construit, approuvée par la personne, production
 qui montre la modification, sauvegarde du serveur. Les gabarits « shop » et « dashboard » vont aussi
 en production par Pono (`template-live.ts`, `TEMPLATE=shop|dashboard`).
+
+## D-040 — Le budget d'un serveur, tenu par Pono
+
+**Tranché le 2026-11-24.**
+
+Un serveur plafonné à 0,001 $ tournait encore après dix minutes. La documentation d'Agent37 le
+confirme : le plafond d'une instance ne couvre que les appels payants passés par Agent37 (IA,
+recherche, outils) ; le temps éveillé n'est jamais plafonné, et l'instance continue de tourner. La
+landing disait pourtant « ne dépasse jamais son budget ».
+
+- À chaque cycle (15 minutes), Pono lit ce que chaque serveur a dépensé depuis le début du mois UTC
+  (`GET /v1/usage`, par instance, temps éveillé et appels payants ensemble). Un serveur éveillé qui
+  atteint son budget est mis en veille, et le journal le dit (`server.budget_reached`).
+- Le réveiller est refusé (`servers.budget_reached`, 402) jusqu'au mois suivant.
+- La landing dit ce qui est vrai : Pono le met en veille quand il a dépensé son budget du mois.
+  Agent37 facture le temps éveillé à la minute mais ne le règle qu'à l'heure : le dépassement
+  possible est d'environ une heure de temps éveillé, plus un cycle.
+
+**Prouvé** (`apps/api/scripts/budget-live.ts`) : dépense du mois lue par serveur chez Agent37,
+serveur jetable dont le budget est atteint mis en veille, puis libéré.

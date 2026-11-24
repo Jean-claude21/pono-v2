@@ -80,12 +80,13 @@ interface ServerRow {
   size: string;
   url: string | null;
   monthly_micros: string;
+  budget_micros: string;
   created_at: Date;
   status_at: Date;
 }
 
 const SELECT = `SELECT s.id, s.project_id, p.name AS project_name, s.external_id, s.agent, s.status, s.size, s.url,
-  s.monthly_micros, s.created_at, s.status_at FROM project_servers s JOIN projects p ON p.id = s.project_id`;
+  s.monthly_micros, s.budget_micros, s.created_at, s.status_at FROM project_servers s JOIN projects p ON p.id = s.project_id`;
 
 function view(r: ServerRow): ServerView {
   return {
@@ -269,11 +270,19 @@ export async function wakeServer(
   id: string,
   sleepServerId?: string,
 ): Promise<void> {
+  const server = await withOrganization(deps.pool, actor.organizationId, (client) =>
+    one(client, id),
+  );
+  // A month that reached its budget stays asleep until the next one (D-040).
+  const spent = isActive(server.status) ? null : await spentThisMonth(deps, server.external_id);
+  if (spent !== null && spent >= Number(server.budget_micros))
+    throw new AppError('servers.budget_reached', 402, 'This server spent its budget this month.', {
+      spentMicros: spent,
+      budgetMicros: Number(server.budget_micros),
+    });
   await freePlace(deps, actor, sleepServerId);
-  const server = await withOrganization(deps.pool, actor.organizationId, async (client) => {
-    const s = await one(client, id);
-    if (!isActive(s.status)) await ensureRoom(client);
-    return s;
+  await withOrganization(deps.pool, actor.organizationId, async (client) => {
+    if (!isActive((await one(client, id)).status)) await ensureRoom(client);
   });
   await deps.serverHost.wake(server.external_id);
   await withOrganization(deps.pool, actor.organizationId, async (client) => {
@@ -305,17 +314,48 @@ export async function releaseServer(deps: ServersDeps, actor: Actor, id: string)
   });
 }
 
-/** Reads every server's status at the host: auto-sleep happens there (FR). */
+/** What a server spent this month at its host, or null when the host does not say (D-040). */
+async function spentThisMonth(deps: ServersDeps, externalId: string): Promise<number | null> {
+  const spend = await deps.serverHost.monthSpend?.(deps.now()).catch(() => null);
+  return spend ? (spend.get(externalId) ?? 0) : null;
+}
+
+/**
+ * Reads every server's status at the host: auto-sleep happens there (FR). A server awake whose
+ * month reached its budget is put to sleep (D-040): the host caps only paid calls, never awake time.
+ */
 export async function syncServers(deps: ServersDeps, organizationId: string): Promise<void> {
   const servers = await withOrganization(deps.pool, organizationId, (client) => rows(client));
+  const spend = servers.length
+    ? await deps.serverHost.monthSpend?.(deps.now()).catch(() => null)
+    : null;
   for (const s of servers) {
     const hosted = await deps.serverHost.get(s.external_id).catch(() => undefined);
     if (hosted === undefined) continue;
-    const status: ServerStatus = hosted === null ? 'released' : hosted.status;
-    if (status !== s.status)
-      await withOrganization(deps.pool, organizationId, (client) =>
-        setStatus(client, s.id, status, { url: hosted?.url ?? null }),
+    let status: ServerStatus = hosted === null ? 'released' : hosted.status;
+    const spent = spend?.get(s.external_id) ?? 0;
+    const over = status === 'running' && spend != null && spent >= Number(s.budget_micros);
+    if (over) {
+      const slept = await deps.serverHost.sleep(s.external_id).then(
+        () => true,
+        () => false,
       );
+      if (slept) status = 'sleeping';
+    }
+    if (status !== s.status || over)
+      await withOrganization(deps.pool, organizationId, async (client) => {
+        if (status !== s.status)
+          await setStatus(client, s.id, status, { url: hosted?.url ?? null });
+        if (over && status === 'sleeping')
+          await record(client, {
+            organizationId,
+            projectId: s.project_id,
+            action: 'server.budget_reached',
+            actorPerson: null,
+            channel: 'system',
+            detail: { spentMicros: spent, budgetMicros: Number(s.budget_micros) },
+          });
+      });
   }
 }
 
