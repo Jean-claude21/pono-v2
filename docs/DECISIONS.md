@@ -598,3 +598,29 @@ production le déploiement précédent. Avec Netlify et Vercel reliés, `put_onl
 (`hosting.repository_access`).
 
 **Prouvé** : adaptateur contre un Vercel simulé. La preuve réelle attend un jeton Vercel.
+
+## D-043 — Choisir un forfait, payer à la boutique, et le reste se fait
+
+**Tranché le 2026-11-24.**
+
+D-041 faisait recopier au client sa clé de licence. L'exploitant veut le parcours d'une boutique :
+un clic, la page de paiement, et le forfait actif.
+
+- Un forfait relié à un produit de licence Chariow : « Choisir » ouvre la page de paiement de la
+  boutique pour ce produit (`POST /v1/checkout`), avec l'atelier et le forfait dans les métadonnées
+  de la vente. Chariow exige un téléphone pour payer (Mobile Money) : la console le demande, une fois,
+  avant la redirection. Sans produit relié, Moneroo reste le paiement.
+- La boutique prévient Pono par un Pulse signé (`successful.sale` sur `/billing/chariow`, secret
+  `whsec_…` réglé dans l'administration). Pono vérifie la signature, ne traite qu'une fois chaque
+  livraison, relit la vente auprès de l'API (seule sa réponse compte), retrouve la licence émise à
+  l'acheteur pour ce produit, l'active pour l'atelier et compte les jours du forfait.
+- Une licence appartient à un seul atelier (`licence_claims`) : payée ici puis recopiée à la main,
+  elle n'ajoute rien ; recopiée ailleurs, elle est refusée.
+- Payée sans licence encore listée, la vente démarre quand même le forfait pour les jours de l'offre.
+- La saisie d'une clé reste possible, pour une clé reçue autrement.
+- « Le paiement passe par Stripe » disait faux : le texte nomme Moneroo et la boutique Chariow.
+
+**Prouvé** : la vraie clé de la boutique ouvre un paiement (Chariow répond « produit introuvable »
+pour un produit absent, pas « droit manquant ») ; parcours complet sur une boutique simulée :
+paiement, Pulse signé, faux Pulse refusé, vente impayée ignorée, licence activée pour l'atelier,
+doublons sans effet. Le premier achat réel attend un produit de licence publié et le Pulse réglé.

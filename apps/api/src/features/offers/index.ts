@@ -70,6 +70,7 @@ export function publicOffer(o: Offer, contactUrl: string | null) {
 /** The operator's settings (D-041): what the console sets, the environment's value otherwise. */
 export const SETTINGS = {
   'chariow.api_key': { sealed: true, env: 'CHARIOW_API_KEY' },
+  'chariow.pulse_secret': { sealed: true, env: 'CHARIOW_PULSE_SECRET' },
   'chariow.store_url': { sealed: false, env: 'CHARIOW_STORE_URL' },
   'sales.contact_url': { sealed: false, env: 'PONO_SALES_CONTACT_URL' },
 } as const;

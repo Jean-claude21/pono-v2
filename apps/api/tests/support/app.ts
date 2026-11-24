@@ -25,7 +25,8 @@ import type {
 import type { Reading, UsageSource } from '../../src/features/usage/index.js';
 import { createPool, type Pool } from '../../src/platform/db.js';
 import { ProviderError } from '../../src/platform/http.js';
-import type { Licence, LicenceProvider } from '../../src/features/billing/licences.js';
+import type { Licence, LicenceProvider, StoreSale } from '../../src/features/billing/licences.js';
+import { verifyChariowSignature } from '../../src/infrastructure/providers/chariow.js';
 import { Sealer } from '../../src/platform/secrets.js';
 import { devBilling } from '../../src/infrastructure/providers/stripe.js';
 
@@ -202,6 +203,22 @@ function fakeLicences(w: World): LicenceProvider {
       known(apiKey);
       return { name: 'Store', url: 'https://store.test' };
     },
+    async checkout(apiKey, input) {
+      known(apiKey);
+      w.checkouts.push(input);
+      return { url: `https://store.test/pay/${input.productId}`, completed: false };
+    },
+    async sale(apiKey, id) {
+      known(apiKey);
+      return w.sales.get(id) ?? null;
+    },
+    async licencesOf(apiKey, email) {
+      known(apiKey);
+      return [...w.licences.entries()]
+        .filter(([, l]) => l.customerEmail === email)
+        .map(([key, l]) => ({ ...l, key }));
+    },
+    verify: verifyChariowSignature,
   };
 }
 
@@ -214,6 +231,9 @@ export interface World {
   /** Licence keys a store sold (D-041), and the keys activated, with the device. */
   licences: Map<string, Licence>;
   activations: string[];
+  /** Payment pages opened at the store, and the sales it knows (D-043). */
+  checkouts: Parameters<LicenceProvider['checkout']>[1][];
+  sales: Map<string, StoreSale>;
   proposalFiles: Map<string, ChangedFile[]>;
   statuses: { fullName: string; sha: string; state: string }[];
   merged: string[];
@@ -259,6 +279,8 @@ export function world(): World {
     spend: new Map(),
     licences: new Map(),
     activations: [],
+    checkouts: [],
+    sales: new Map(),
     previewBranches: new Map(),
     branchBuilds: [],
     proposalFiles: new Map(),
@@ -490,6 +512,7 @@ export function testApp(): TestApp {
     }),
     licences: fakeLicences(w),
     settingsEnv: {},
+    wait: async () => undefined,
     admins: ['operator'],
     rateLimits: { auth: 100_000, v1: 100_000, mcp: 100_000 },
     now: () => now.value,
