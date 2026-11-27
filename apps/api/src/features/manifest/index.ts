@@ -11,6 +11,7 @@ import {
   LEGACY_FILES,
   MANIFEST_PATH,
   prefill,
+  manifestJsonSchema,
   readLegacy,
   readManifest,
   resolveSkills,
@@ -388,4 +389,13 @@ export function manifestRoutes(deps: ManifestDeps): Hono<AppEnv> {
       if (!body.success) throw new AppError('request.invalid', 400, 'Expected use and off lists.');
       return c.json(await proposeSkills(deps, c.var.actor, idOf(c.req.param('id')), body.data));
     });
+}
+
+/** `/v1/schema`, read signed out: the JSON Schema that `pono.yaml` declares on its first line. */
+export function schemaRoutes(): Hono<AppEnv> {
+  return new Hono<AppEnv>().get('/project-1.json', (c) => {
+    c.header('Access-Control-Allow-Origin', '*');
+    c.header('Cache-Control', 'public, max-age=3600');
+    return c.json(manifestJsonSchema());
+  });
 }

@@ -1,5 +1,6 @@
 import { label } from '@/lib/labels';
 import * as m from '@/paraglide/messages.js';
+import { getLocale } from '@/paraglide/runtime.js';
 
 // What /v1/usage answers (apps/api/src/features/usage).
 export interface Reading {
@@ -41,6 +42,13 @@ export interface UsageView {
 export function alertText(a: Alert): string {
   if (a.kind === 'renewal')
     return m.alert_renewal({ service: String(a.detail.service), days: String(a.detail.days) });
+  if (a.kind === 'plan')
+    return m.alert_plan({
+      plan: a.detail.plan === 'pro' ? m.plan_pro() : m.plan_solo(),
+      date: new Intl.DateTimeFormat(getLocale(), { day: 'numeric', month: 'long' }).format(
+        new Date(String(a.detail.until)),
+      ),
+    });
   return m.alert_quota({
     meter: label('meter', String(a.detail.meter)),
     subject: String(a.detail.subject ?? ''),

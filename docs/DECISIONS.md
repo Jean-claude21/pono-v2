@@ -624,3 +624,44 @@ un clic, la page de paiement, et le forfait actif.
 pour un produit absent, pas « droit manquant ») ; parcours complet sur une boutique simulée :
 paiement, Pulse signé, faux Pulse refusé, vente impayée ignorée, licence activée pour l'atelier,
 doublons sans effet. Le premier achat réel attend un produit de licence publié et le Pulse réglé.
+
+## D-044 — Pono prévient avant la fin d'une période payée, et publie le schéma de `pono.yaml`
+
+**Tranché le 2026-11-26.**
+
+D-023 laissait « un rappel avant la fin de la période » à faire : sans lui, un client payant
+redescendait au plan gratuit sans le savoir. Et `pono.yaml` déclarait un schéma à une adresse
+(`pono.dev`) que personne ne servait.
+
+- À chaque cycle, après `expire_paid_plans()`, `remind_paid_plans()` ouvre une alerte `plan` quand
+  une période payée finit dans les trois jours : « attention » d'abord, « critique » le dernier jour.
+  Elle est indexée par la date de fin : une seule alerte par période, envoyée une fois par email avec
+  le lien des Réglages, et lue dans la console avec les autres. Une période repayée, ou finie, la
+  ferme.
+- Le schéma JSON du manifeste est servi par Pono, sans connexion, à
+  `https://pono.kete.digital/v1/schema/project-1.json`. Il est produit depuis le schéma Zod :
+  une seule source. Tout `pono.yaml` écrit par Pono le déclare sur sa première ligne.
+- Les alertes par Telegram sortent de la roadmap : l'email suffit pour la v1.
+
+**Prouvé** : `tests/moneroo.test.ts` (rien à 20 jours, une seule alerte à 2 jours sur deux cycles,
+critique à 12 heures, fermée après un paiement et après la fin) ; `tests/manifest.test.ts` (schéma
+servi sans connexion, `$id` égal à l'adresse déclarée, `version` à 1, aucun champ inconnu admis).
+
+## D-045 — La page publique vend l'atelier de l'IA de la personne
+
+**Tranché le 2026-11-26**, remplace l'accroche de D-027 sur la page publique.
+
+La page publique parle à celui qui paie déjà ChatGPT ou Claude et ne peut pas en faire une vraie
+application : « Ton IA sait coder. Pono lui donne un atelier. » Elle suit douze temps (accroche,
+problème, enjeu, transformation, étapes, piliers, différence, confiance, tarifs, questions, appel)
+et la signature « Pose. Ça tient. ».
+
+- Les outils montrés avec leur marque sont ceux qui sont reliés aujourd'hui : Claude, ChatGPT,
+  Claude Code, Codex, GitHub, Netlify, Vercel, Cloudflare, Neon. Cursor et Umami n'y sont plus,
+  faute de preuve ; le Mobile Money est écrit en texte, sans logo d'opérateur.
+- Deux piliers montrent de vraies captures de la console, datées ; le troisième (mise en ligne) est
+  un exemple dessiné avec les pièces de la console, et le dit.
+- Aucune vidéo ni aucun chiffre de temps tant qu'ils ne sont pas mesurés.
+
+**Ce qui la renverserait.** Les entretiens avec les premiers utilisateurs : leurs mots remplacent
+les nôtres.

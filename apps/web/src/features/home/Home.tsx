@@ -1,42 +1,78 @@
+import { useEffect, useRef, useState } from 'react';
 import { LocaleSwitch } from '@/features/shell/LocaleSwitch';
-import { Icon, type IconName } from '@/features/shell/ui';
+import { Icon } from '@/features/shell/ui';
 import { useApi } from '@/lib/api';
 import { label } from '@/lib/labels';
-import { nameOf } from '@/lib/providers';
 import { getLocale } from '@/paraglide/runtime.js';
 import * as m from '@/paraglide/messages.js';
+import serversShot from './captures/console-serveurs.webp';
+import overviewShot from './captures/console-vue-ensemble.webp';
+import { Logo, type LogoName } from './logos';
 
 const SIGN_IN = '/auth/sign-in/github';
+const MCP_ADDRESS = 'https://pono.kete.digital/mcp';
 
-/** What the workshop works with, as the brands write themselves. */
-const WORKS_WITH = [
-  'github',
-  'claude-code',
-  'codex',
-  'cursor',
-  'netlify',
-  'vercel',
-  'cloudflare',
-  'coolify',
-  'neon',
-  'umami-self',
-  'openai',
+/** A request followed from the chat to production: the tools Pono's MCP really calls (D-039). */
+const RELAY = [
+  { text: m.home_relay_1, tool: 'launch_project', state: 'active' },
+  { text: m.home_relay_2, tool: 'start_dev', state: 'active' },
+  { text: m.home_relay_3, tool: 'edit_file', state: 'active' },
+  { text: m.home_relay_4, tool: 'propose_release', state: 'warning' },
+  { text: m.home_relay_5, tool: 'console', state: 'healthy', you: true },
+  { text: m.home_relay_6, tool: 'production', state: 'healthy' },
 ] as const;
 
-const FEATURES: readonly { icon: IconName; title: () => string; body: () => string }[] = [
-  { icon: 'grid', title: m.home_f1_title, body: m.home_f1_body },
-  { icon: 'gauge', title: m.home_f2_title, body: m.home_f2_body },
-  { icon: 'server', title: m.home_f3_title, body: m.home_f3_body },
-  { icon: 'shield', title: m.home_f4_title, body: m.home_f4_body },
-  { icon: 'bot', title: m.home_f5_title, body: m.home_f5_body },
-  { icon: 'book', title: m.home_f6_title, body: m.home_f6_body },
+/** Only what is wired today: agents by MCP, GitHub, the hosts and the database Pono reads. */
+const WORKS_WITH: readonly { group: () => string; tools: readonly [LogoName, string][] }[] = [
+  {
+    group: m.home_works_ai,
+    tools: [
+      ['claude', 'Claude'],
+      ['openai', 'ChatGPT'],
+      ['claudecode', 'Claude Code'],
+      ['codex', 'Codex'],
+    ],
+  },
+  { group: m.home_works_code, tools: [['github', 'GitHub']] },
+  {
+    group: m.home_works_sites,
+    tools: [
+      ['netlify', 'Netlify'],
+      ['vercel', 'Vercel'],
+      ['cloudflare', 'Cloudflare'],
+      ['neon', 'Neon'],
+    ],
+  },
+];
+
+const PAINS = [
+  { title: m.home_pain_1_title, body: m.home_pain_1_body },
+  { title: m.home_pain_2_title, body: m.home_pain_2_body },
+  { title: m.home_pain_3_title, body: m.home_pain_3_body },
+  { title: m.home_pain_4_title, body: m.home_pain_4_body },
+];
+
+const CHANGES = [
+  { before: m.home_change_1_before, after: m.home_change_1_after },
+  { before: m.home_change_2_before, after: m.home_change_2_after },
+  { before: m.home_change_3_before, after: m.home_change_3_after },
+  { before: m.home_change_4_before, after: m.home_change_4_after },
 ];
 
 const STEPS = [
   { title: m.home_step_1_title, body: m.home_step_1_body },
-  { title: m.home_step_2_title, body: m.home_step_2_body },
+  { title: m.home_step_2_title, body: m.home_step_2_body, address: true },
   { title: m.home_step_3_title, body: m.home_step_3_body },
 ];
+
+const DIFFERENCES = [
+  { title: m.home_diff_1_title, body: m.home_diff_1_body },
+  { title: m.home_diff_2_title, body: m.home_diff_2_body },
+  { title: m.home_diff_3_title, body: m.home_diff_3_body },
+  { title: m.home_diff_4_title, body: m.home_diff_4_body },
+];
+
+const TRUST = [m.home_trust_1, m.home_trust_2, m.home_trust_3, m.home_trust_4];
 
 /** The plans' names and audiences; their price, servers and sale come from the operator (D-041). */
 const PLANS = [
@@ -58,58 +94,92 @@ const FAQ = [
   { q: m.home_q2, a: m.home_a2 },
   { q: m.home_q3, a: m.home_a3 },
   { q: m.home_q4, a: m.home_a4 },
+  { q: m.home_q5, a: m.home_a5 },
+  { q: m.home_q6, a: m.home_a6 },
 ];
 
-function price(amount: number, cents = false): string {
+function price(amount: number): string {
   return new Intl.NumberFormat(getLocale(), {
     style: 'currency',
     currency: 'USD',
-    minimumFractionDigits: cents ? 2 : 0,
-    maximumFractionDigits: cents ? 2 : 0,
+    maximumFractionDigits: 0,
   }).format(amount);
 }
 
-/** The workshop as it looks, drawn with the console's own pieces: the proof in the first screen. */
-function Preview() {
-  const rows = [
-    { name: m.home_demo_1, state: 'healthy', text: m.home_demo_live, cost: 4.2 },
-    { name: m.home_demo_2, state: 'failing', text: m.home_demo_down, cost: 11.8 },
-    { name: m.home_demo_3, state: 'active', text: m.home_demo_dev, cost: 2.1 },
-    { name: m.home_demo_4, state: 'idle', text: m.home_demo_asleep, cost: 0 },
-  ];
+/** The relay lights its steps one after another the first time it is seen; visible without script. */
+function Relay() {
+  const list = useRef<HTMLOListElement>(null);
+  const [lit, setLit] = useState<number | null>(null);
+  useEffect(() => {
+    const el = list.current;
+    if (!el || matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+    if (!('IntersectionObserver' in window)) return;
+    setLit(0);
+    const timers: number[] = [];
+    const io = new IntersectionObserver(
+      (entries) => {
+        if (!entries.some((e) => e.isIntersecting)) return;
+        io.disconnect();
+        RELAY.forEach((_, i) => timers.push(window.setTimeout(() => setLit(i + 1), 250 + i * 420)));
+      },
+      { threshold: 0.4 },
+    );
+    io.observe(el);
+    return () => {
+      io.disconnect();
+      timers.forEach(clearTimeout);
+    };
+  }, []);
   return (
-    <div className="proof home-preview" aria-hidden="true">
-      <div className="proof-head">
-        <span className="mono-label">{m.home_preview_title()}</span>
-        <span className="tiny mute">{m.home_preview_updated()}</span>
+    <figure className="relay" aria-label={m.home_relay_label()}>
+      <div className="relay-chat">
+        <span className="relay-who">{m.home_relay_who()}</span>
+        <p className="relay-ask">{m.home_relay_ask()}</p>
       </div>
-      <div className="home-preview-stats">
-        <div>
-          <b className="figures">{price(18.1, true)}</b>
-          <span className="tiny mute">{m.home_preview_month()}</span>
-        </div>
-        <div>
-          <b className="figures">2/3</b>
-          <span className="tiny mute">{m.home_preview_servers()}</span>
-        </div>
-      </div>
-      {rows.map((r) => (
-        <div className="proof-row" key={r.state}>
-          <span className="mono">{r.name()}</span>
-          <span className={`state state-${r.state}`}>{r.text()}</span>
-          <span className="figures">{price(r.cost, true)}</span>
-        </div>
-      ))}
-      <div className="verdict">
-        <span className="mono-label">{m.home_preview_verdict_label()}</span>
-        <h3>{m.home_preview_verdict()}</h3>
-        <p>{m.home_preview_verdict_body()}</p>
-      </div>
-    </div>
+      <ol ref={list} className={lit === null ? 'relay-steps' : 'relay-steps pending'}>
+        {RELAY.map((s, i) => (
+          <li
+            key={s.tool}
+            className={[
+              `state state-${s.state}`,
+              'you' in s ? 'relay-you' : '',
+              lit !== null && i < lit ? 'on' : '',
+            ].join(' ')}
+          >
+            <span>{'you' in s ? <b>{s.text()}</b> : s.text()}</span>
+            <span className="figures mute">{s.tool}</span>
+          </li>
+        ))}
+      </ol>
+      <figcaption className="verdict healthy">
+        <span className="mono-label">{m.home_rule_label()}</span>
+        <h3>{m.home_rule_title()}</h3>
+        <p>{m.home_rule_body()}</p>
+      </figcaption>
+    </figure>
   );
 }
 
-/** Pono's public page: what it is, for whom, how, and what it costs; then sign in with GitHub. */
+function Shot({
+  src,
+  width,
+  height,
+  alt,
+}: {
+  src: string;
+  width: number;
+  height: number;
+  alt: string;
+}) {
+  return (
+    <figure className="shot">
+      <img src={src} width={width} height={height} loading="lazy" alt={alt} />
+      <figcaption>{m.home_capture_caption()}</figcaption>
+    </figure>
+  );
+}
+
+/** Pono's public page: for whom, what changes, how, what it costs; then sign in with GitHub. */
 export function Home() {
   const offers = useApi<{ offers: PublicOffer[] }>('/v1/offers');
   return (
@@ -121,7 +191,7 @@ export function Home() {
           </a>
           <nav className="home-nav">
             <a href="#how">{m.home_nav_how()}</a>
-            <a href="#agents">{m.home_nav_agents()}</a>
+            <a href="#change">{m.home_nav_change()}</a>
             <a href="#pricing">{m.home_nav_pricing()}</a>
             <a href="#faq">{m.home_nav_faq()}</a>
           </nav>
@@ -130,211 +200,269 @@ export function Home() {
             <a className="btn btn-ghost btn-sm" href={SIGN_IN}>
               {m.home_signin()}
             </a>
+            <a className="btn btn-primary btn-sm home-hide-sm" href={SIGN_IN}>
+              {m.home_start()}
+            </a>
           </div>
         </div>
       </header>
 
-      <section className="hero">
-        <div className="wrap">
-          <div>
-            <span className="home-eyebrow">{m.home_eyebrow()}</span>
-            <h1>
-              {m.home_title_1()} <span>{m.home_title_2()}</span>
-            </h1>
-            <p className="lede">{m.home_lede()}</p>
-            <div className="actions">
-              <a className="btn btn-primary" href={SIGN_IN}>
-                <Icon name="github" />
-                {m.home_cta()}
-              </a>
-              <a className="btn btn-ghost" href="#how">
-                {m.home_cta_how()}
-              </a>
-            </div>
-            <p className="fine">{m.home_fine()}</p>
-          </div>
-          <Preview />
-        </div>
-      </section>
-
-      <section className="home-logos">
-        <div className="wrap">
-          <span className="mono-label">{m.home_works_with()}</span>
-          <ul>
-            {WORKS_WITH.map((id) => (
-              <li key={id}>{nameOf(id)}</li>
-            ))}
-          </ul>
-        </div>
-      </section>
-
-      <section className="section">
-        <div className="wrap">
-          <span className="mono-label">{m.home_problem_label()}</span>
-          <h2 className="mt-sm">{m.home_problem_title()}</h2>
-          <p className="intro">{m.home_problem_body()}</p>
-          <div className="home-features">
-            {FEATURES.map((f) => (
-              <article key={f.icon}>
-                <span className="home-feature-icon">
-                  <Icon name={f.icon} />
-                </span>
-                <h3>{f.title()}</h3>
-                <p>{f.body()}</p>
-              </article>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      <section className="section alt" id="how">
-        <div className="wrap">
-          <span className="mono-label">{m.home_how_label()}</span>
-          <h2 className="mt-sm">{m.home_how_title()}</h2>
-          <ol className="home-steps">
-            {STEPS.map((s, i) => (
-              <li key={i}>
-                <span className="figures">{String(i + 1).padStart(2, '0')}</span>
-                <h3>{s.title()}</h3>
-                <p>{s.body()}</p>
-              </li>
-            ))}
-          </ol>
-        </div>
-      </section>
-
-      <section className="section" id="agents">
-        <div className="wrap split">
-          <div>
-            <span className="mono-label">{m.home_agents_label()}</span>
-            <h2 className="mt-sm">{m.home_agents_title()}</h2>
-            <p className="intro">{m.home_agents_body()}</p>
-            <div className="verdict warning mt-lg">
-              <span className="mono-label">{m.home_agents_never_label()}</span>
-              <h3>{m.home_agents_never()}</h3>
-            </div>
-          </div>
-          <div className="home-terminal" aria-label={m.home_agents_comment()}>
-            <div className="home-terminal-bar">
-              <i />
-              <i />
-              <i />
-            </div>
-            <pre>
-              <code>
-                <span className="mute"># {m.home_agents_comment()}</span>
-                {'\n'}
-                {'https://pono.kete.digital/mcp'}
-                {'\n\n'}
-                <span className="mute">{'> '}</span>
-                {'resume_project boutique-lome'}
-                {'\n'}
-                <span className="mute">{'> '}</span>
-                {'edit_file src/pages/contact.tsx'}
-                {'\n'}
-                <span className="ok">{'✓ '}</span>
-                {'https://boutique-lome.preview.pono.kete.digital'}
-                {'\n'}
-                <span className="mute">{'> '}</span>
-                {'push_changes · propose_release'}
-                {'\n'}
-                <span className="ok">{'✓ '}</span>
-                {'PR #42 → main'}
-              </code>
-            </pre>
-          </div>
-        </div>
-      </section>
-
-      <section className="section alt" id="pricing">
-        <div className="wrap">
-          <span className="mono-label">{m.home_pricing_label()}</span>
-          <h2 className="mt-sm">{m.home_pricing_title()}</h2>
-          <p className="intro">{m.home_pricing_body()}</p>
-          <div className="home-plans">
-            {PLANS.map((p) => {
-              const offer = offers.result?.ok
-                ? offers.result.data.offers.find((o) => o.plan === p.id)
-                : undefined;
-              const sold = !offer || offer.availability === 'available';
-              const featured = p.id === 'solo' && sold;
-              return (
-                <article key={p.id} className={featured ? 'featured' : undefined}>
-                  <header>
-                    <h3>{p.name()}</h3>
-                    {featured && <span className="tag">{m.home_plan_popular()}</span>}
-                  </header>
-                  <p className="home-price">
-                    {!offer ? (
-                      <b className="figures">—</b>
-                    ) : sold ? (
-                      <>
-                        <b className="figures">{price((offer.priceMicros ?? 0) / 1_000_000)}</b>
-                        <span className="mute">{m.home_plan_month()}</span>
-                      </>
-                    ) : (
-                      <b>{label('availability', offer.availability)}</b>
-                    )}
-                  </p>
-                  {offer && (
-                    <p className="home-plan-servers">
-                      <Icon name="server" />
-                      {offer.activeServers === 1
-                        ? m.home_plan_server_one()
-                        : m.home_plan_servers({ count: String(offer.activeServers) })}
-                    </p>
-                  )}
-                  <p className="soft small">{p.for()}</p>
-                  {offer?.availability === 'coming_soon' ? (
-                    <span className="btn btn-ghost btn-sm" aria-disabled="true">
-                      {label('availability', 'coming_soon')}
-                    </span>
-                  ) : offer?.availability === 'on_request' ? (
-                    <a className="btn btn-ghost btn-sm" href={offer.contactUrl ?? SIGN_IN}>
-                      {m.settings_contact()}
-                    </a>
-                  ) : (
-                    <a
-                      className={`btn ${featured ? 'btn-primary' : 'btn-ghost'} btn-sm`}
-                      href={SIGN_IN}
-                    >
-                      {p.id === 'free' ? m.home_cta() : m.home_plan_choose()}
-                    </a>
-                  )}
-                </article>
-              );
-            })}
-          </div>
-          <p className="mute small mt-lg">{m.home_plan_pay()}</p>
-        </div>
-      </section>
-
-      <section className="section" id="faq">
-        <div className="wrap split">
-          <h2>{m.home_faq_title()}</h2>
-          <dl className="faq">
-            {FAQ.map((f, i) => (
-              <div key={i}>
-                <dt>{f.q()}</dt>
-                <dd>{f.a()}</dd>
+      <main>
+        <section className="home-hero">
+          <div className="wrap home-hero-grid">
+            <div>
+              <h1>
+                {m.home_title_1()} <span>{m.home_title_2()}</span>
+              </h1>
+              <p className="lede">{m.home_lede()}</p>
+              <div className="actions">
+                <a className="btn btn-primary" href={SIGN_IN}>
+                  <Icon name="github" />
+                  {m.home_cta()}
+                </a>
+                <a className="btn btn-ghost" href="#how">
+                  {m.home_cta_how()}
+                </a>
               </div>
-            ))}
-          </dl>
-        </div>
-      </section>
+              <p className="fine">{m.home_fine()}</p>
+            </div>
+            <Relay />
+          </div>
+          <p className="wrap home-signature">{m.home_signature()}</p>
+        </section>
 
-      <section className="cta-band">
-        <div className="wrap">
-          <div>
+        <section className="home-logos">
+          <div className="wrap">
+            <h2>{m.home_works_title()}</h2>
+            <ul className="home-logo-groups">
+              {WORKS_WITH.map((g) => (
+                <li key={g.group()}>
+                  <span className="home-group">{g.group()}</span>
+                  <ul>
+                    {g.tools.map(([logo, name]) => (
+                      <li key={logo}>
+                        <Logo name={logo} />
+                        {name}
+                      </li>
+                    ))}
+                  </ul>
+                </li>
+              ))}
+              <li>
+                <span className="home-group">{m.home_works_pay()}</span>
+                <ul>
+                  <li className="home-text-only">{m.home_works_pay_value()}</li>
+                </ul>
+              </li>
+            </ul>
+          </div>
+        </section>
+
+        <section className="home-section">
+          <div className="wrap home-split">
+            <h2>{m.home_problem_title()}</h2>
+            <ul className="home-lines home-pains">
+              {PAINS.map((p, i) => (
+                <li key={i}>
+                  <b>{p.title()}</b>
+                  {p.body()}
+                </li>
+              ))}
+            </ul>
+          </div>
+        </section>
+
+        <section className="home-section home-stakes">
+          <div className="wrap">
+            <h2>{m.home_stakes_title()}</h2>
+            <p>{m.home_stakes_body()}</p>
+          </div>
+        </section>
+
+        <section className="home-section alt" id="change">
+          <div className="wrap">
+            <h2>{m.home_change_title()}</h2>
+            <div className="home-compare">
+              <div className="home-compare-head">
+                <span className="mono-label">{m.home_change_before()}</span>
+                <span className="mono-label">{m.home_change_after()}</span>
+              </div>
+              {CHANGES.map((c, i) => (
+                <div className="home-compare-row" key={i}>
+                  <span>{c.before()}</span>
+                  <span>{c.after()}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        </section>
+
+        <section className="home-section" id="how">
+          <div className="wrap">
+            <h2>{m.home_how_title()}</h2>
+            <ol className="home-steps">
+              {STEPS.map((s, i) => (
+                <li key={i}>
+                  <span className="figures mute">{i + 1}</span>
+                  <h3>{s.title()}</h3>
+                  <p>{s.body()}</p>
+                  {'address' in s && <code className="address">{MCP_ADDRESS}</code>}
+                </li>
+              ))}
+            </ol>
+            <a className="btn btn-primary" href={SIGN_IN}>
+              <Icon name="github" />
+              {m.home_cta()}
+            </a>
+          </div>
+        </section>
+
+        <section className="home-section alt">
+          <div className="wrap">
+            <h2>{m.home_pillars_title()}</h2>
+            <div className="home-pillar wide">
+              <div>
+                <h3>{m.home_p1_title()}</h3>
+                <p>{m.home_p1_body()}</p>
+              </div>
+              <Shot src={serversShot} width={1212} height={373} alt={m.home_p1_alt()} />
+            </div>
+            <div className="home-pillar flip">
+              <div>
+                <h3>{m.home_p2_title()}</h3>
+                <p>{m.home_p2_body()}</p>
+              </div>
+              <figure className="shot">
+                <div className="proof" aria-hidden="true">
+                  <div className="verdict">
+                    <span className="mono-label">{m.home_p2_verdict_label()}</span>
+                    <h3>{m.home_p2_verdict()}</h3>
+                    <p>{m.home_p2_verdict_body()}</p>
+                  </div>
+                </div>
+                <figcaption>{m.home_p2_example()}</figcaption>
+              </figure>
+            </div>
+            <div className="home-pillar wide">
+              <div>
+                <h3>{m.home_p3_title()}</h3>
+                <p>{m.home_p3_body()}</p>
+              </div>
+              <Shot src={overviewShot} width={814} height={328} alt={m.home_p3_alt()} />
+            </div>
+            <p className="home-more">{m.home_pillars_more()}</p>
+          </div>
+        </section>
+
+        <section className="home-band">
+          <div className="wrap">
+            <h2>{m.home_diff_title()}</h2>
+            <dl className="home-diff">
+              {DIFFERENCES.map((d, i) => (
+                <div key={i}>
+                  <dt>{d.title()}</dt>
+                  <dd>{d.body()}</dd>
+                </div>
+              ))}
+            </dl>
+          </div>
+        </section>
+
+        <section className="home-section">
+          <div className="wrap home-split">
+            <h2>{m.home_trust_title()}</h2>
+            <ul className="home-lines home-facts">
+              {TRUST.map((t, i) => (
+                <li key={i}>{t()}</li>
+              ))}
+            </ul>
+          </div>
+        </section>
+
+        <section className="home-section alt" id="pricing">
+          <div className="wrap">
+            <h2>{m.home_pricing_title()}</h2>
+            <p className="intro">{m.home_pricing_body()}</p>
+            <div className="home-plans">
+              {PLANS.map((p) => {
+                const offer = offers.result?.ok
+                  ? offers.result.data.offers.find((o) => o.plan === p.id)
+                  : undefined;
+                const sold = !offer || offer.availability === 'available';
+                const featured = p.id === 'solo' && sold;
+                return (
+                  <article key={p.id} className={featured ? 'featured' : undefined}>
+                    <h3>
+                      {p.name()}
+                      {featured && <span className="tag">{m.home_plan_popular()}</span>}
+                    </h3>
+                    <p className="home-price">
+                      {!offer ? (
+                        <b className="figures">—</b>
+                      ) : sold ? (
+                        <>
+                          <b>{price((offer.priceMicros ?? 0) / 1_000_000)}</b>
+                          {p.id !== 'free' && <span className="mute">{m.home_plan_month()}</span>}
+                        </>
+                      ) : (
+                        <b>{label('availability', offer.availability)}</b>
+                      )}
+                    </p>
+                    {offer && (
+                      <p className="home-plan-servers">
+                        {offer.activeServers === 1
+                          ? m.home_plan_server_one()
+                          : m.home_plan_servers({ count: String(offer.activeServers) })}
+                      </p>
+                    )}
+                    <p className="home-plan-for">{p.for()}</p>
+                    {offer?.availability === 'coming_soon' ? (
+                      <span className="btn btn-ghost" aria-disabled="true">
+                        {label('availability', 'coming_soon')}
+                      </span>
+                    ) : offer?.availability === 'on_request' ? (
+                      <a className="btn btn-ghost" href={offer.contactUrl ?? SIGN_IN}>
+                        {m.settings_contact()}
+                      </a>
+                    ) : (
+                      <a className={`btn ${featured ? 'btn-primary' : 'btn-ghost'}`} href={SIGN_IN}>
+                        {p.id === 'free' ? m.home_start() : m.home_plan_choose()}
+                      </a>
+                    )}
+                  </article>
+                );
+              })}
+            </div>
+            <p className="fine">{m.home_plan_pay()}</p>
+          </div>
+        </section>
+
+        <section className="home-section" id="faq">
+          <div className="wrap home-split">
+            <h2>{m.home_faq_title()}</h2>
+            <div className="home-faq">
+              {FAQ.map((f, i) => (
+                <details key={i}>
+                  <summary>{f.q()}</summary>
+                  <p>{f.a()}</p>
+                </details>
+              ))}
+            </div>
+          </div>
+        </section>
+
+        <section className="home-band home-final">
+          <div className="wrap">
             <h2>{m.home_final_title()}</h2>
             <p>{m.home_final_body()}</p>
+            <a className="btn home-btn-invert" href={SIGN_IN}>
+              <Icon name="github" />
+              {m.home_cta()}
+            </a>
+            <p className="home-signature">{m.home_signature()}</p>
           </div>
-          <a className="btn btn-primary" href={SIGN_IN}>
-            <Icon name="github" />
-            {m.home_cta()}
-          </a>
-        </div>
-      </section>
+        </section>
+      </main>
 
       <footer className="site-footer">
         <div className="wrap">
@@ -342,9 +470,17 @@ export function Home() {
             <b>P</b>Pono
           </a>
           <span className="mute small">{m.home_footer()}</span>
-          <a className="small" href={SIGN_IN}>
-            {m.home_footer_console()}
-          </a>
+          <nav>
+            <a className="small" href="#pricing">
+              {m.home_nav_pricing()}
+            </a>
+            <a className="small" href="#faq">
+              {m.home_nav_faq()}
+            </a>
+            <a className="small" href={SIGN_IN}>
+              {m.home_footer_console()}
+            </a>
+          </nav>
         </div>
       </footer>
     </div>
