@@ -624,3 +624,47 @@ un clic, la page de paiement, et le forfait actif.
 pour un produit absent, pas « droit manquant ») ; parcours complet sur une boutique simulée :
 paiement, Pulse signé, faux Pulse refusé, vente impayée ignorée, licence activée pour l'atelier,
 doublons sans effet. Le premier achat réel attend un produit de licence publié et le Pulse réglé.
+
+## D-046 — Les erreurs inattendues vont à Sentry, sans rien de personnel
+
+**Tranché le 2026-11-27.**
+
+Une erreur en production (une route qui plante, un cycle qui échoue, une page qui casse) n'était
+visible que dans les journaux de l'hébergeur.
+
+- Un projet `pono` dans l'organisation Sentry de l'auteur reçoit les erreurs de l'API (`onError`,
+  cycle par organisation, démarrage et exécuteur des tâches de fond) et du navigateur.
+- Rien de personnel ni de secret n'est envoyé : ni cookie, ni en-tête, ni corps, ni chaîne de
+  requête, ni nom, ni email ; seulement la méthode, le chemin, la route, l'organisation (un id) et
+  l'endroit (`where`). Aucune trace de performance.
+- Sans `PONO_SENTRY_DSN` (API) ni `VITE_SENTRY_DSN` (console, au build), tout reste dans les
+  journaux : développement et tests n'envoient rien. Le SDK du navigateur ne se charge qu'après
+  l'affichage de la page.
+- Le DSN n'est pas un secret (il est public dans le navigateur), mais il vit dans l'environnement,
+  pas dans le code : Sentry reste un adaptateur, hors du domaine (principe 3).
+
+**Prouvé** : `tests/monitor.test.ts` (filtrage de l'événement, environnement, éteint sans DSN).
+`scripts/sentry-probe.ts` avec le vrai DSN : l'erreur de test atteint Sentry, qui la refuse
+(`rate_limited`, `error_usage_exceeded`) : le quota d'erreurs de l'organisation, partagé entre tous
+ses projets, est épuisé sur 30 jours (7 726 erreurs venues de `dym-functions`). La réception dans le
+projet reste à prouver une fois le quota libéré.
+
+## D-047 — La base de Pono dort entre deux cycles
+
+**Tranché le 2026-11-27**, remplace pg-boss de D-018 et la cadence de 15 minutes.
+
+La base Neon de Pono était éveillée 330 h sur les 640 h de novembre : pg-boss interroge sa file
+toutes les 2 secondes et le cycle tournait toutes les 15 minutes, alors que Neon ne met la base en
+veille qu'après 5 minutes sans requête. Au rythme du mois, le quota gratuit (400 h à 0,25 CU) aurait
+lâché avant la fin.
+
+- Le cycle tourne dans le processus de l'API, **une fois par heure, à l'heure pile**, sous un verrou
+  consultatif (`pg_try_advisory_lock`) : une seconde instance ne le rejoue pas. Rien ne lit la base
+  entre deux cycles. pg-boss est retiré.
+- Le budget d'un serveur (D-040) est donc relu toutes les heures : le dépassement possible devient
+  environ une heure de temps éveillé, plus un cycle.
+- Les règles communes à tous les projets sont dans `LEARNINGS-BASES-SERVERLESS.md`, à la racine de
+  l'espace de travail de l'auteur.
+
+**Prouvé** : `tests/operations.test.ts` (le prochain cycle tombe à l'heure pile). À relire après le
+déploiement : `active_time` du projet Neon `pono` le lendemain.

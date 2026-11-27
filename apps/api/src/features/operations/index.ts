@@ -5,6 +5,7 @@ import { refreshProject } from '../projects/application.js';
 import { autoRollback } from '../releases/index.js';
 import { syncServers, type ServersDeps } from '../servers/index.js';
 import { readUsage, type UsageDeps } from '../usage/index.js';
+import { reportError } from '../../platform/monitor.js';
 
 /** Sends a short message to people (D-018). The provider id is an opaque adapter id. */
 export interface Notifier {
@@ -112,29 +113,69 @@ export async function runCycle(deps: OperationsDeps, only?: string[]): Promise<C
       report.notified += await notifyAlerts(deps, id);
     } catch (error) {
       report.failures++;
-      console.error(`cycle failed for one organization: ${(error as Error).message}`);
+      reportError(error, { where: 'job:cycle', organizationId: id });
     }
   }
   return report;
 }
 
-/** Pono's periodic task on pg-boss (D-002): one cycle every 15 minutes, one runner at a time. */
+/** Minutes between two cycles: hourly, so a Neon database sleeps between them (D-047). */
+export const CYCLE_MINUTES = 60;
+
+/** Milliseconds until the next whole multiple of `minutes` after `now` (cycles fall on :00). */
+export function untilNextTick(now: Date, minutes = CYCLE_MINUTES): number {
+  const period = minutes * 60_000;
+  return period - (now.getTime() % period) || period;
+}
+
+/**
+ * Pono's periodic task (D-047, replaces pg-boss of D-018): one cycle every hour, on the hour, in
+ * this process. Nothing reads the database between two cycles, so it can sleep; an advisory lock
+ * keeps a second instance from running the same cycle.
+ */
 export async function startJobs(
-  ownerUrl: string,
   deps: OperationsDeps,
-  every = '*/15 * * * *',
+  minutes = CYCLE_MINUTES,
 ): Promise<() => Promise<void>> {
-  const { PgBoss } = await import('pg-boss');
-  const boss = new PgBoss(ownerUrl);
-  boss.on('error', (error: Error) => console.error(`jobs: ${error.message}`));
-  await boss.start();
-  await boss.createQueue('cycle', { policy: 'singleton' });
-  await boss.schedule('cycle', every);
-  await boss.work('cycle', async () => {
-    const report = await runCycle(deps);
-    console.log(`cycle: ${JSON.stringify(report)}`);
-  });
-  return () => boss.stop({ graceful: true });
+  let timer: NodeJS.Timeout | undefined;
+  let running: Promise<void> = Promise.resolve();
+  let stopped = false;
+  const tick = async () => {
+    const client = await deps.pool.connect();
+    try {
+      const { rows } = await client.query<{ locked: boolean }>(
+        'SELECT pg_try_advisory_lock(hashtext($1)) AS locked',
+        ['pono:cycle'],
+      );
+      if (!rows[0]?.locked) return;
+      try {
+        const report = await runCycle(deps);
+        console.log(`cycle: ${JSON.stringify(report)}`);
+      } finally {
+        await client.query('SELECT pg_advisory_unlock(hashtext($1))', ['pono:cycle']);
+      }
+    } catch (error) {
+      reportError(error, { where: 'job:cycle' });
+    } finally {
+      client.release();
+    }
+  };
+  const plan = () => {
+    if (stopped) return;
+    timer = setTimeout(
+      () => {
+        running = tick().finally(plan);
+      },
+      untilNextTick(new Date(), minutes),
+    );
+    timer.unref?.();
+  };
+  plan();
+  return async () => {
+    stopped = true;
+    clearTimeout(timer);
+    await running;
+  };
 }
 
 export type { Pool };

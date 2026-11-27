@@ -550,7 +550,7 @@
   "overview_usage_none": "Aucun quota lu pour l’instant.",
   "overview_usage_foot": "Lu chez chaque fournisseur avec tes clés · seuil d’alerte 80 %",
   "overview_alerts": "Alertes",
-  "overview_alerts_foot": "Vérifiées toutes les 15 minutes",
+  "overview_alerts_foot": "Vérifiées toutes les heures",
   "overview_alert_bad": "À corriger",
   "overview_alert_warn": "À surveiller",
   "next_title": "Que faire maintenant",
