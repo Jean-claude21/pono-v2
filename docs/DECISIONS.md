@@ -624,3 +624,27 @@ un clic, la page de paiement, et le forfait actif.
 pour un produit absent, pas « droit manquant ») ; parcours complet sur une boutique simulée :
 paiement, Pulse signé, faux Pulse refusé, vente impayée ignorée, licence activée pour l'atelier,
 doublons sans effet. Le premier achat réel attend un produit de licence publié et le Pulse réglé.
+
+## D-046 — Les erreurs inattendues vont à Sentry, sans rien de personnel
+
+**Tranché le 2026-11-27.**
+
+Une erreur en production (une route qui plante, un cycle qui échoue, une page qui casse) n'était
+visible que dans les journaux de l'hébergeur.
+
+- Un projet `pono` dans l'organisation Sentry de l'auteur reçoit les erreurs de l'API (`onError`,
+  cycle par organisation, démarrage et exécuteur des tâches de fond) et du navigateur.
+- Rien de personnel ni de secret n'est envoyé : ni cookie, ni en-tête, ni corps, ni chaîne de
+  requête, ni nom, ni email ; seulement la méthode, le chemin, la route, l'organisation (un id) et
+  l'endroit (`where`). Aucune trace de performance.
+- Sans `PONO_SENTRY_DSN` (API) ni `VITE_SENTRY_DSN` (console, au build), tout reste dans les
+  journaux : développement et tests n'envoient rien. Le SDK du navigateur ne se charge qu'après
+  l'affichage de la page.
+- Le DSN n'est pas un secret (il est public dans le navigateur), mais il vit dans l'environnement,
+  pas dans le code : Sentry reste un adaptateur, hors du domaine (principe 3).
+
+**Prouvé** : `tests/monitor.test.ts` (filtrage de l'événement, environnement, éteint sans DSN).
+`scripts/sentry-probe.ts` avec le vrai DSN : l'erreur de test atteint Sentry, qui la refuse
+(`rate_limited`, `error_usage_exceeded`) : le quota d'erreurs de l'organisation, partagé entre tous
+ses projets, est épuisé sur 30 jours (7 726 erreurs venues de `dym-functions`). La réception dans le
+projet reste à prouver une fois le quota libéré.

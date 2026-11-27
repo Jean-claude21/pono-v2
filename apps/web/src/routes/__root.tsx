@@ -1,7 +1,8 @@
-import type { ReactNode } from 'react';
+import { useEffect, type ReactNode } from 'react';
 import { createRootRoute, HeadContent, Outlet, Scripts } from '@tanstack/react-router';
 import * as m from '@/paraglide/messages.js';
 import { getLocale } from '@/paraglide/runtime.js';
+import { initBrowserMonitoring } from '@/lib/monitor';
 import appCss from '@/styles/app.css?url';
 
 /**
@@ -50,6 +51,10 @@ export const Route = createRootRoute({
 });
 
 function Document({ children }: Readonly<{ children: ReactNode }>) {
+  // Browser errors go to the tracker once the page is interactive, when a DSN was built in (D-046).
+  useEffect(() => {
+    void initBrowserMonitoring();
+  }, []);
   // Light or dark, set before paint by the theme script (D-022).
   return (
     <html lang={getLocale()} suppressHydrationWarning>
