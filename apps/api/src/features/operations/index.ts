@@ -31,6 +31,7 @@ const ALERT_SUBJECT: Record<string, string> = {
   spend: 'A spend crossed its threshold',
   server: 'A project server needs you',
   release: 'A release needs you',
+  plan: 'Your paid plan ends soon',
 };
 
 /** Tells the members of an organization about the alerts that opened since the last cycle. */
@@ -51,6 +52,10 @@ async function notifyAlerts(deps: OperationsDeps, organizationId: string): Promi
   });
   if (!alerts.length || !to.length) return 0;
   const lines = alerts.map((a) => `- ${ALERT_SUBJECT[a.kind] ?? a.kind} (${a.level})`);
+  // A period does not renew itself (D-023): the message says where to pay it again (D-044).
+  const renew = alerts.some((a) => a.kind === 'plan')
+    ? [`Pay the next period: ${deps.publicUrl}/settings`]
+    : [];
   await deps.notifier.send({
     to,
     subject:
@@ -58,7 +63,7 @@ async function notifyAlerts(deps: OperationsDeps, organizationId: string): Promi
         ? `Pono — ${ALERT_SUBJECT[alerts[0]!.kind] ?? 'An alert'}`
         : `Pono — ${alerts.length} alerts`,
     // Never a secret, never a figure that is not already in the console.
-    text: [...lines, '', `Open the console: ${deps.publicUrl}/usage`].join('\n'),
+    text: [...lines, '', ...renew, `Open the console: ${deps.publicUrl}/usage`].join('\n'),
   });
   await withOrganization(deps.pool, organizationId, (client) =>
     client.query('UPDATE alerts SET notified_at = now() WHERE id = ANY($1::uuid[])', [
@@ -83,6 +88,8 @@ export async function runCycle(deps: OperationsDeps, only?: string[]): Promise<C
   };
   // Paid periods that ended go back to the free plan first (D-023).
   await deps.pool.query('SELECT expire_paid_plans()').catch(() => undefined);
+  // Then a period about to end opens its reminder, sent below with the other alerts (D-044).
+  await deps.pool.query('SELECT remind_paid_plans()').catch(() => undefined);
   const orgs = (
     await deps.pool.query<{ id: string }>('SELECT id FROM system_organizations()')
   ).rows.filter((o) => !only || only.includes(o.id));

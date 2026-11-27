@@ -56,14 +56,15 @@ conversation sur un serveur prêt, et la production obéit à la règle qu'il a 
 ## Phase 2 — La consommation · `003-usage`
 
 > **Livrée le 2026-11-12, en local.** Preuve : 60 relevés réels (Netlify, Neon, Cloudflare),
-> GitHub et OpenAI « indisponibles » faute de droit. Restent les alertes hors console.
+> GitHub et OpenAI « indisponibles » faute de droit. Alertes par email ; rappel avant la fin d'une
+> période payée (D-044).
 
 **Objectif.** Un total juste de ses abonnements, et l'alerte avant que ça lâche.
 
 - Relevés mesurés : Neon, Netlify, Cloudflare, GitHub, Agent37, OpenAI.
 - Abonnements déclarés (Claude, domaines…), renouvellements.
 - Total du mois, coût par projet, prévision, sources affichées.
-- Alertes : seuils, Telegram et email.
+- Alertes : seuils et email (Telegram retiré, D-044).
 
 **Preuve.** Le total de l'auteur pour un mois, comparé ligne à ligne à ses factures.
 
@@ -120,7 +121,7 @@ quel.
 
 ## Phase 8 — Le manifeste et l'adoption · `009-manifest`
 
-> **Codée et testée le 2026-11-12.** Reste le schéma JSON publié à l'adresse de sa ligne `$schema`.
+> **Codée et testée le 2026-11-12.** Schéma JSON publié par Pono le 2026-11-26 (D-044).
 
 **Preuve.** Un dépôt sans manifeste, dans n'importe quelle technologie, reçoit sa PR `pono/manifest`.
 
@@ -186,8 +187,8 @@ quel.
 
 ### Restent, gestes de l'auteur
 
-- Application GitHub : ajouter les permissions « Administration » et « Webhooks », puis accepter la
-  mise à jour sur les deux installations.
+- ~~Application GitHub : permissions « Administration » et « Webhooks »~~ — faite (Kete Pono, droits
+  demandés le 2026-11-23, installations acceptées selon l'auteur le 2026-11-26).
 - Moneroo : déclarer le webhook `https://pono.kete.digital/billing/webhook` ; activer XOF en sandbox
   pour les boutiques.
 - Relier Claude.ai à `https://pono.kete.digital/mcp` (preuve OAuth en ligne).

@@ -20,7 +20,12 @@ import {
   type IdentityProvider,
 } from './features/identity/index.js';
 import { launchRoutes } from './features/launch/index.js';
-import { manifestRoutes, syncManifest, type ManifestDeps } from './features/manifest/index.js';
+import {
+  manifestRoutes,
+  schemaRoutes,
+  syncManifest,
+  type ManifestDeps,
+} from './features/manifest/index.js';
 import { projectRoutes, type WorkshopAdapters } from './features/projects/index.js';
 import { releaseRoutes } from './features/releases/index.js';
 import { serverRoutes, serversUsage, type ProjectServerHost } from './features/servers/index.js';
@@ -86,6 +91,7 @@ export function createApp(appDeps: AppDeps): Hono<AppEnv> {
   app.route('/auth', authRoutes(deps));
   // Read signed out, before the session check of /v1: the landing shows the plans as sold.
   app.route('/v1/offers', offerRoutes(deps));
+  app.route('/v1/schema', schemaRoutes());
 
   const v1 = new Hono<AppEnv>();
   v1.use('*', requireSession(deps));

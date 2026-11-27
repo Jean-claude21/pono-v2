@@ -146,4 +146,63 @@ describe('Moneroo (D-023)', () => {
     await t.pool.query('SELECT expire_paid_plans()');
     expect((await (await call(t, cookie, '/v1/plan')).json()).plan).toBe('free');
   });
+
+  it('warns once before a paid period ends, and closes the warning when it is paid again (D-044)', async () => {
+    const cookie = await signIn(t, `r${randomUUID().slice(0, 8)}`);
+    const org = (await (await call(t, cookie, '/v1/me')).json()).organization.id as string;
+    // Open plan alerts, read as the console reads them.
+    const open = async () =>
+      (
+        (await (await call(t, cookie, '/v1/usage')).json()).alerts as {
+          kind: string;
+          level: string;
+          detail: { plan: string };
+        }[]
+      )
+        .filter((a) => a.kind === 'plan')
+        .map((a) => ({ level: a.level, plan: a.detail.plan }));
+    const endsIn = (interval: string) =>
+      owner.query(
+        `UPDATE organizations SET plan = 'solo', plan_paid_until = now() + interval '${interval}' WHERE id = $1`,
+        [org],
+      );
+
+    await endsIn('20 days');
+    await t.pool.query('SELECT remind_paid_plans()');
+    expect(await open()).toEqual([]);
+
+    await endsIn('2 days');
+    await t.pool.query('SELECT remind_paid_plans()');
+    await t.pool.query('SELECT remind_paid_plans()'); // the next cycle: still one warning
+    const [first] = await open();
+    expect(first).toMatchObject({ level: 'warn', plan: 'solo' });
+    expect(await open()).toHaveLength(1);
+
+    await endsIn('12 hours');
+    await t.pool.query('SELECT remind_paid_plans()');
+    expect((await open())[0]!.level).toBe('bad');
+
+    // Paid again: the period moves, the warning closes.
+    await t.pool.query('SELECT pay_organization_plan($1, $2, $3, $4, $5)', [
+      org,
+      'solo',
+      null,
+      `pay_${randomUUID()}`,
+      PAID_DAYS,
+    ]);
+    await t.pool.query('SELECT remind_paid_plans()');
+    expect(await open()).toEqual([]);
+
+    // A period that ended closes its warning too.
+    await endsIn('1 day');
+    await t.pool.query('SELECT remind_paid_plans()');
+    expect(await open()).toHaveLength(1);
+    await owner.query(
+      "UPDATE organizations SET plan_paid_until = now() - interval '1 minute' WHERE id = $1",
+      [org],
+    );
+    await t.pool.query('SELECT expire_paid_plans()');
+    await t.pool.query('SELECT remind_paid_plans()');
+    expect(await open()).toEqual([]);
+  });
 });

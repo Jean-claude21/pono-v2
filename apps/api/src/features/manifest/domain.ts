@@ -7,7 +7,8 @@ import { z } from 'zod';
  * change (D-006).
  */
 export const MANIFEST_PATH = 'pono.yaml';
-export const SCHEMA_URL = 'https://pono.dev/schema/project-1.json';
+/** Published by Pono itself, read signed out (D-044): editors validate `pono.yaml` against it. */
+export const SCHEMA_URL = 'https://pono.kete.digital/v1/schema/project-1.json';
 
 const name = z.string().min(1).max(100);
 const path = z.string().min(1).max(300);
@@ -318,4 +319,13 @@ export function resolveSkills(
     if (family === 'safety') return { name, family, active: true, because: 'safety_default' };
     return { name, family, active: false, because: 'not_chosen' };
   });
+}
+
+/** The manifest as a JSON Schema, served at `SCHEMA_URL`: one source, the Zod schema above. */
+export function manifestJsonSchema(): Record<string, unknown> {
+  return {
+    $id: SCHEMA_URL,
+    title: 'Pono manifest (pono.yaml)',
+    ...z.toJSONSchema(manifestSchema, { io: 'input' }),
+  };
 }

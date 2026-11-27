@@ -5,6 +5,7 @@ import {
   readLegacy,
   readManifest,
   resolveSkills,
+  SCHEMA_URL,
   writeManifest,
 } from '../src/features/manifest/domain.js';
 import { call, signIn, testApp, type TestApp } from './support/app.js';
@@ -238,5 +239,26 @@ describe('importing without a proposal', () => {
     );
     await call(t, cookie, `/v1/projects/${id}/manifest/sync`, { method: 'POST' });
     expect(t.world.opened.get(fullName)!.branch).toBe('pono/manifest');
+  });
+});
+
+describe('the published schema (D-044)', () => {
+  it('serves the JSON Schema that pono.yaml names, signed out', async () => {
+    const res = await t.app.request('/v1/schema/project-1.json');
+    expect(res.status).toBe(200);
+    expect(res.headers.get('access-control-allow-origin')).toBe('*');
+    const schema = (await res.json()) as {
+      $id: string;
+      properties: Record<string, unknown>;
+      required: string[];
+      additionalProperties: boolean;
+    };
+    expect(schema.$id).toBe(SCHEMA_URL);
+    expect(new URL(SCHEMA_URL).pathname).toBe('/v1/schema/project-1.json');
+    expect(schema.properties.version).toMatchObject({ const: 1 });
+    expect(schema.required).toEqual(expect.arrayContaining(['version', 'name']));
+    expect(schema.additionalProperties).toBe(false);
+    // Every manifest Pono writes declares it on its first line.
+    expect(writeManifest({ version: 1, name: 'lectio' }).split('\n')[0]).toContain(SCHEMA_URL);
   });
 });
