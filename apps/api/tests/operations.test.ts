@@ -1,6 +1,11 @@
 import { randomUUID } from 'node:crypto';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { runCycle, type Notifier } from '../src/features/operations/index.js';
+import {
+  CYCLE_MINUTES,
+  runCycle,
+  untilNextTick,
+  type Notifier,
+} from '../src/features/operations/index.js';
 import { serversUsage } from '../src/features/servers/index.js';
 import { coolifyHosting, coolifyStatus } from '../src/infrastructure/providers/coolify.js';
 import { call, signIn, testApp, type TestApp } from './support/app.js';
@@ -221,5 +226,14 @@ describe('Coolify (D-018)', () => {
       /https/,
     );
     expect(coolifyStatus('cancelled-by-user')).toBe('cancelled');
+  });
+});
+
+describe('the hourly cycle (D-047)', () => {
+  it('falls on the hour, so several jobs share one wake-up of the database', () => {
+    expect(untilNextTick(new Date('2026-11-27T10:59:00Z'))).toBe(60_000);
+    expect(untilNextTick(new Date('2026-11-27T10:00:00Z'))).toBe(3_600_000);
+    expect(untilNextTick(new Date('2026-11-27T10:30:30Z'))).toBe(29.5 * 60_000);
+    expect(CYCLE_MINUTES).toBeGreaterThanOrEqual(60);
   });
 });

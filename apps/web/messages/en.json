@@ -550,7 +550,7 @@
   "overview_usage_none": "No quota read yet.",
   "overview_usage_foot": "Read at each provider with your keys · warning at 80 %",
   "overview_alerts": "Alerts",
-  "overview_alerts_foot": "Checked every 15 minutes",
+  "overview_alerts_foot": "Checked every hour",
   "overview_alert_bad": "To fix",
   "overview_alert_warn": "To watch",
   "next_title": "What to do next",

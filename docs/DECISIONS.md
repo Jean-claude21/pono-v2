@@ -648,3 +648,23 @@ visible que dans les journaux de l'hébergeur.
 (`rate_limited`, `error_usage_exceeded`) : le quota d'erreurs de l'organisation, partagé entre tous
 ses projets, est épuisé sur 30 jours (7 726 erreurs venues de `dym-functions`). La réception dans le
 projet reste à prouver une fois le quota libéré.
+
+## D-047 — La base de Pono dort entre deux cycles
+
+**Tranché le 2026-11-27**, remplace pg-boss de D-018 et la cadence de 15 minutes.
+
+La base Neon de Pono était éveillée 330 h sur les 640 h de novembre : pg-boss interroge sa file
+toutes les 2 secondes et le cycle tournait toutes les 15 minutes, alors que Neon ne met la base en
+veille qu'après 5 minutes sans requête. Au rythme du mois, le quota gratuit (400 h à 0,25 CU) aurait
+lâché avant la fin.
+
+- Le cycle tourne dans le processus de l'API, **une fois par heure, à l'heure pile**, sous un verrou
+  consultatif (`pg_try_advisory_lock`) : une seconde instance ne le rejoue pas. Rien ne lit la base
+  entre deux cycles. pg-boss est retiré.
+- Le budget d'un serveur (D-040) est donc relu toutes les heures : le dépassement possible devient
+  environ une heure de temps éveillé, plus un cycle.
+- Les règles communes à tous les projets sont dans `LEARNINGS-BASES-SERVERLESS.md`, à la racine de
+  l'espace de travail de l'auteur.
+
+**Prouvé** : `tests/operations.test.ts` (le prochain cycle tombe à l'heure pile). À relire après le
+déploiement : `active_time` du projet Neon `pono` le lendemain.

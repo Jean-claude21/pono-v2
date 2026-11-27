@@ -199,12 +199,12 @@ const deps: AppDeps = {
 const app = createApp(deps);
 
 // Pono's periodic task (D-018): every workshop read again, automatic rollbacks, alerts by email.
-if (config.PONO_JOBS === '1' && config.PONO_DATABASE_OWNER_URL) {
+if (config.PONO_JOBS === '1') {
   const notifier =
     config.RESEND_API_KEY && config.PONO_ALERTS_FROM
       ? resendNotifier({ apiKey: config.RESEND_API_KEY, from: config.PONO_ALERTS_FROM, fetch })
       : undefined;
-  void startJobs(config.PONO_DATABASE_OWNER_URL, {
+  void startJobs({
     ...deps,
     internalUsage: [serversUsage()],
     publicUrl: config.PONO_PUBLIC_URL,
