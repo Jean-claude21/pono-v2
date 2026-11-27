@@ -5,6 +5,7 @@ import { refreshProject } from '../projects/application.js';
 import { autoRollback } from '../releases/index.js';
 import { syncServers, type ServersDeps } from '../servers/index.js';
 import { readUsage, type UsageDeps } from '../usage/index.js';
+import { reportError } from '../../platform/monitor.js';
 
 /** Sends a short message to people (D-018). The provider id is an opaque adapter id. */
 export interface Notifier {
@@ -112,7 +113,7 @@ export async function runCycle(deps: OperationsDeps, only?: string[]): Promise<C
       report.notified += await notifyAlerts(deps, id);
     } catch (error) {
       report.failures++;
-      console.error(`cycle failed for one organization: ${(error as Error).message}`);
+      reportError(error, { where: 'job:cycle', organizationId: id });
     }
   }
   return report;
@@ -126,7 +127,7 @@ export async function startJobs(
 ): Promise<() => Promise<void>> {
   const { PgBoss } = await import('pg-boss');
   const boss = new PgBoss(ownerUrl);
-  boss.on('error', (error: Error) => console.error(`jobs: ${error.message}`));
+  boss.on('error', (error: Error) => reportError(error, { where: 'job:runner' }));
   await boss.start();
   await boss.createQueue('cycle', { policy: 'singleton' });
   await boss.schedule('cycle', every);

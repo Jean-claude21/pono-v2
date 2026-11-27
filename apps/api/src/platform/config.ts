@@ -11,6 +11,8 @@ const schema = z.object({
     .refine((v) => Buffer.from(v, 'base64').length === 32, '32 bytes, in base64'),
   /** The console's address: the only origin a browser sees. */
   PONO_PUBLIC_URL: z.url().default('http://localhost:3000'),
+  /** Where unexpected errors go (D-046); without it they stay in the log only. */
+  PONO_SENTRY_DSN: z.url().optional(),
   PONO_GITHUB_CLIENT_ID: z.string().min(1).optional(),
   PONO_GITHUB_CLIENT_SECRET: z.string().min(1).optional(),
   /** `1` wires the development sign-in; refused in production (FR-001). */

@@ -5,6 +5,7 @@ import { serversUsage } from './features/servers/index.js';
 import { posthogAnalytics } from './infrastructure/providers/posthog.js';
 import { umamiCloud, umamiSelfHosted } from './infrastructure/providers/umami.js';
 import { serve } from '@hono/node-server';
+import { initMonitoring, reportError } from './platform/monitor.js';
 import { createApp, type AppDeps } from './app.js';
 import { loadCatalog } from './features/catalog/index.js';
 import { devIdentity, githubIdentity, type IdentityProvider } from './features/identity/index.js';
@@ -37,6 +38,13 @@ import { createPool } from './platform/db.js';
 import { Sealer } from './platform/secrets.js';
 
 const config = loadConfig();
+// Unexpected errors go to the tracker when it is configured (D-046).
+initMonitoring({
+  dsn: config.PONO_SENTRY_DSN,
+  publicUrl: config.PONO_PUBLIC_URL,
+  nodeEnv: config.NODE_ENV,
+  release: process.env.SOURCE_COMMIT,
+});
 
 const identity: IdentityProvider[] = [];
 if (config.PONO_GITHUB_CLIENT_ID && config.PONO_GITHUB_CLIENT_SECRET) {
@@ -203,7 +211,7 @@ if (config.PONO_JOBS === '1' && config.PONO_DATABASE_OWNER_URL) {
     ...(notifier ? { notifier } : {}),
   }).then(
     () => console.log(`Periodic task on (alerts by email: ${notifier ? 'yes' : 'no'})`),
-    (error: Error) => console.error(`Periodic task not started: ${error.message}`),
+    (error: Error) => reportError(error, { where: 'job:start' }),
   );
 }
 

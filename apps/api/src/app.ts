@@ -28,6 +28,7 @@ import { usageRoutes, type InternalUsage, type UsageSource } from './features/us
 import type { AppEnv } from './platform/context.js';
 import { ping, type Pool } from './platform/db.js';
 import { AppError, errorBody } from './platform/errors.js';
+import { reportError } from './platform/monitor.js';
 import type { Sealer } from './platform/secrets.js';
 
 export interface AppDeps {
@@ -124,7 +125,11 @@ export function createApp(appDeps: AppDeps): Hono<AppEnv> {
       return c.redirect('/');
     if (error instanceof AppError)
       return c.json(errorBody(error.code, error.message, error.detail), error.status);
-    console.error(error);
+    // An error nobody expected: logged, and sent to the tracker with the route, never the request.
+    reportError(error, {
+      where: 'api',
+      extra: { method: c.req.method, route: c.req.routePath },
+    });
     return c.json(errorBody('internal', 'Something went wrong.'), 500);
   });
   return app;

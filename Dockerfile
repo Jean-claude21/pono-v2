@@ -12,6 +12,8 @@ RUN pnpm install --frozen-lockfile
 # Read at build time by the console (D-017).
 ARG VITE_UMAMI_WEBSITE_ID=""
 ARG VITE_UMAMI_SCRIPT_URL=""
+# Browser errors (D-046): the public DSN of the error tracker; empty turns it off.
+ARG VITE_SENTRY_DSN=""
 RUN pnpm --filter @pono/web build
 
 ENV NODE_ENV=production PONO_API_PORT=8787 PONO_API_URL=http://127.0.0.1:8787
